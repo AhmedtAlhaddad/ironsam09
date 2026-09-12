@@ -241,6 +241,156 @@ void main() {
     expect(cartRect.top, lessThan(80));
   });
 
+  testWidgets('product details uses intentional responsive compositions', (
+    tester,
+  ) async {
+    final store = StoreState();
+    addTearDown(store.dispose);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    for (final width in <double>[320, 390, 768]) {
+      await tester.binding.setSurfaceSize(Size(width, 900));
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: width == 320
+                  ? const TextScaler.linear(1.3)
+                  : TextScaler.noScaling,
+            ),
+            child: child!,
+          ),
+          home: ProductDetailsPage(product: products.first, store: store),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('product-details-mobile-layout')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('product-details-desktop-layout')),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+    }
+
+    for (final width in <double>[1024, 1440]) {
+      await tester.binding.setSurfaceSize(Size(width, 1000));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ProductDetailsPage(product: products.first, store: store),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('product-details-desktop-layout')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets('product gallery controls and color fallback reset safely', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    const product = Product(
+      name: 'Gallery controls',
+      category: 'Test',
+      gender: 'Test',
+      price: 100,
+      sizes: 'M',
+      status: 'Available',
+      imageUrl: '',
+      images: [
+        ProductImage(id: 'global', url: 'https://example.com/global.jpg'),
+        ProductImage(
+          id: 'black-1',
+          colorId: 'black',
+          url: 'https://example.com/black-1.jpg',
+        ),
+        ProductImage(
+          id: 'black-2',
+          colorId: 'black',
+          url: 'https://example.com/black-2.jpg',
+        ),
+      ],
+      colors: [
+        ProductColor(id: 'black', nameAr: 'أسود', hexCode: '#000000'),
+        ProductColor(id: 'white', nameAr: 'أبيض', hexCode: '#FFFFFF'),
+      ],
+      variants: [
+        ProductVariant(colorId: 'black', size: 'M', stockQuantity: 2),
+        ProductVariant(colorId: 'white', size: 'M', stockQuantity: 2),
+      ],
+    );
+    final store = StoreState();
+    addTearDown(store.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProductDetailsPage(product: product, store: store),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('product-color-swatch-black')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('product-gallery-next')), findsOneWidget);
+    expect(find.text('1 / 2'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('product-gallery-next')));
+    await tester.pumpAndSettle();
+    expect(find.text('2 / 2'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('product-color-swatch-white')));
+    await tester.pumpAndSettle();
+    expect(find.text('1 / 1'), findsOneWidget);
+    expect(find.byKey(const ValueKey('product-gallery-next')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('size selector exposes unavailable variants as disabled', (
+    tester,
+  ) async {
+    const product = Product(
+      name: 'Size availability',
+      category: 'Test',
+      gender: 'Test',
+      price: 100,
+      sizes: 'M - L',
+      status: 'Available',
+      imageUrl: '',
+      colors: [ProductColor(id: 'black', nameAr: 'أسود', hexCode: '#000000')],
+      variants: [
+        ProductVariant(colorId: 'black', size: 'M', stockQuantity: 0),
+        ProductVariant(colorId: 'black', size: 'L', stockQuantity: 2),
+      ],
+    );
+    final store = StoreState();
+    addTearDown(store.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProductDetailsPage(product: product, store: store),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final unavailable = tester.widget<ChoiceChip>(
+      find.byKey(const ValueKey('product-size-M')),
+    );
+    final available = tester.widget<ChoiceChip>(
+      find.byKey(const ValueKey('product-size-L')),
+    );
+    expect(unavailable.onSelected, isNull);
+    expect(available.onSelected, isNotNull);
+  });
+
   testWidgets('collections page renders the approved storefront flow', (
     tester,
   ) async {
@@ -370,10 +520,12 @@ void main() {
     expect(find.byKey(const ValueKey('product-details-cart')), findsOneWidget);
     expect(store.itemCount, 1);
     expect(find.text('تمت الإضافة إلى السلة'), findsOneWidget);
+    expect(find.text('تمت الإضافة'), findsOneWidget);
     await tester.pumpAndSettle();
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
     expect(find.text('تمت الإضافة إلى السلة'), findsNothing);
+    expect(find.text('إضافة إلى السلة'), findsOneWidget);
   });
 
   testWidgets('adding a sized product requires a selected size', (
