@@ -44,6 +44,7 @@ class CatalogPage extends StatefulWidget {
 class _CatalogPageState extends State<CatalogPage> {
   Timer? _searchDebounce;
   final FocusNode _searchFocusNode = FocusNode();
+  final GlobalKey _catalogSectionKey = GlobalKey();
   List<String> _liveCategories = const [];
   List<Product> _visibleProducts = const [];
 
@@ -93,6 +94,17 @@ class _CatalogPageState extends State<CatalogPage> {
 
   List<Product> get visibleProducts => _visibleProducts;
 
+  Product? get featuredProduct {
+    for (final product in widget.store.products) {
+      if (widget.genderFilter == null ||
+          product.gender == widget.genderFilter ||
+          product.gender == 'للجنسين') {
+        return product;
+      }
+    }
+    return null;
+  }
+
   List<Product> _filterProducts() {
     final normalizedQuery = query.trim().toLowerCase();
     return widget.store.products.where((product) {
@@ -131,6 +143,17 @@ class _CatalogPageState extends State<CatalogPage> {
   void _focusSearch() {
     if (!mounted) return;
     _searchFocusNode.requestFocus();
+  }
+
+  void _scrollToCatalog() {
+    final sectionContext = _catalogSectionKey.currentContext;
+    if (sectionContext == null) return;
+    Scrollable.ensureVisible(
+      sectionContext,
+      duration: StorefrontMotion.resolve(context, StorefrontMotion.deliberate),
+      curve: StorefrontMotion.curve,
+      alignment: 0,
+    );
   }
 
   void openCart() {
@@ -179,8 +202,17 @@ class _CatalogPageState extends State<CatalogPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            PageIntro(title: widget.title),
-                            const SizedBox(height: StorefrontSpacing.xl),
+                            PageIntro(
+                              title: widget.title,
+                              featuredProduct: featuredProduct,
+                              onShopPressed: _scrollToCatalog,
+                            ),
+                            const SizedBox(height: StorefrontSpacing.xxl),
+                            CatalogSectionHeading(
+                              key: _catalogSectionKey,
+                              title: widget.title,
+                            ),
+                            const SizedBox(height: StorefrontSpacing.lg),
                             FilterBar(
                               categories: liveCategories,
                               selectedCategory: selectedCategory,
@@ -210,7 +242,7 @@ class _CatalogPageState extends State<CatalogPage> {
                               ),
                             ),
                             const SliverToBoxAdapter(
-                              child: SizedBox(height: StorefrontSpacing.xl),
+                              child: SizedBox(height: StorefrontSpacing.lg),
                             ),
                             SliverToBoxAdapter(
                               child: Center(

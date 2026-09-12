@@ -5,6 +5,7 @@ import '../../core/theme/storefront_theme.dart';
 import '../../data/models/product.dart';
 import '../../features/cart/cart_state.dart';
 import '../pages/catalog/product_details_page.dart';
+import 'safe_product_image.dart';
 
 class IronSamLogo extends StatelessWidget {
   const IronSamLogo({this.width = 96, this.height = 58, super.key});
@@ -338,69 +339,319 @@ class _HeaderLink extends StatelessWidget {
 }
 
 class PageIntro extends StatelessWidget {
-  const PageIntro({required this.title, super.key});
+  const PageIntro({
+    required this.title,
+    required this.featuredProduct,
+    required this.onShopPressed,
+    super.key,
+  });
 
   final String title;
+  final Product? featuredProduct;
+  final VoidCallback onShopPressed;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final titleSize = constraints.maxWidth >= StorefrontLayout.desktop
-            ? 56.0
-            : constraints.maxWidth >= 600
-            ? 44.0
-            : constraints.maxWidth < StorefrontLayout.narrow
-            ? 32.0
-            : 36.0;
-        final descriptionWidth =
-            constraints.maxWidth > StorefrontLayout.readingMaxWidth
-            ? StorefrontLayout.readingMaxWidth
-            : constraints.maxWidth;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'جميع الملابس',
-              style: TextStyle(
-                color: StorefrontColors.mutedInk,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
+        final isDesktop = constraints.maxWidth >= 900;
+        final isTablet = constraints.maxWidth >= 600;
+        final product = featuredProduct;
+        final image = _HeroImage(
+          product: product,
+          cacheWidth:
+              (constraints.maxWidth * MediaQuery.devicePixelRatioOf(context))
+                  .round(),
+        );
+        final copy = _HeroCopy(
+          title: title,
+          onShopPressed: onShopPressed,
+          isDesktop: isDesktop,
+          isNarrow: constraints.maxWidth < StorefrontLayout.narrow,
+        );
+
+        return Semantics(
+          container: true,
+          label: 'تشكيلة آيرون سام: $title',
+          child: Container(
+            width: double.infinity,
+            height: isDesktop
+                ? (constraints.maxWidth * .42).clamp(480.0, 600.0)
+                : null,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: StorefrontColors.ink,
+              borderRadius: const BorderRadius.all(
+                Radius.circular(StorefrontRadius.subtle),
               ),
+              border: Border.all(color: StorefrontColors.ink),
+              boxShadow: StorefrontShadows.raised,
             ),
-            const SizedBox(height: 7),
-            RichText(
-              text: TextSpan(
-                style: TextStyle(
-                  color: inkColor,
-                  fontSize: titleSize,
-                  fontWeight: FontWeight.w900,
-                  height: 1.12,
-                ),
-                children: [
-                  TextSpan(text: title),
-                  TextSpan(
-                    text: '.',
-                    style: TextStyle(color: accentColor),
+            child: isDesktop
+                ? Row(
+                    key: const ValueKey('catalog-hero-desktop'),
+                    textDirection: TextDirection.rtl,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(flex: 9, child: copy),
+                      Expanded(flex: 11, child: image),
+                    ],
+                  )
+                : Column(
+                    key: const ValueKey('catalog-hero-mobile'),
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      AspectRatio(
+                        aspectRatio: isTablet ? 1.72 : 1.05,
+                        child: image,
+                      ),
+                      copy,
+                    ],
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 15),
-            SizedBox(
-              width: descriptionWidth,
-              child: Text(
-                'استكشف تشكيلة آيرون سام المختارة من الملابس الرياضية عالية الأداء. صُممت لتوفر لك الراحة والقوة في كل حركة، مع لمسة عصرية تناسب أسلوب حياتك اليومي.',
-                style: TextStyle(
-                  color: StorefrontColors.mutedInk,
-                  fontSize: 16,
-                  height: 1.75,
-                ),
-              ),
-            ),
-          ],
+          ),
         );
       },
+    );
+  }
+}
+
+class _HeroImage extends StatelessWidget {
+  const _HeroImage({required this.product, required this.cacheWidth});
+
+  final Product? product;
+  final int cacheWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final product = this.product;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        SafeProductImage(
+          url: product?.imageUrl,
+          fit: BoxFit.cover,
+          cacheWidth: cacheWidth,
+          filterQuality: FilterQuality.medium,
+          semanticLabel: product == null
+              ? 'صورة تشكيلة آيرون سام'
+              : 'صورة ${product.name}',
+          fallback: ColoredBox(
+            color: StorefrontColors.surfaceMuted,
+            child: Center(
+              child: ExcludeSemantics(
+                child: Opacity(
+                  opacity: .2,
+                  child: IronSamLogo(width: 180, height: 110),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const PositionedDirectional(
+          top: 0,
+          bottom: 0,
+          start: 0,
+          child: SizedBox(
+            width: 5,
+            child: ColoredBox(color: StorefrontColors.accent),
+          ),
+        ),
+        Positioned.fill(
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: AlignmentDirectional.centerStart,
+                  end: AlignmentDirectional.centerEnd,
+                  colors: [
+                    StorefrontColors.ink.withValues(alpha: .16),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HeroCopy extends StatelessWidget {
+  const _HeroCopy({
+    required this.title,
+    required this.onShopPressed,
+    required this.isDesktop,
+    required this.isNarrow,
+  });
+
+  final String title;
+  final VoidCallback onShopPressed;
+  final bool isDesktop;
+  final bool isNarrow;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compactDesktop = isDesktop && constraints.maxWidth < 520;
+        final headingSize = isDesktop
+            ? compactDesktop
+                  ? 38.0
+                  : 52.0
+            : isNarrow
+            ? 34.0
+            : 40.0;
+        final horizontalPadding = compactDesktop
+            ? StorefrontSpacing.xl
+            : isDesktop
+            ? StorefrontSpacing.xxl
+            : isNarrow
+            ? StorefrontSpacing.md
+            : StorefrontSpacing.lg;
+        final verticalPadding = compactDesktop
+            ? StorefrontSpacing.xl
+            : isDesktop
+            ? StorefrontSpacing.xxl
+            : StorefrontSpacing.xl;
+
+        return Container(
+          color: StorefrontColors.ink,
+          padding: EdgeInsets.symmetric(
+            horizontal: horizontalPadding,
+            vertical: verticalPadding,
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'مجموعة آيرون سام · $title',
+                style: const TextStyle(
+                  color: StorefrontColors.surfaceMuted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              SizedBox(
+                height: compactDesktop
+                    ? StorefrontSpacing.md
+                    : isDesktop
+                    ? StorefrontSpacing.lg
+                    : StorefrontSpacing.md,
+              ),
+              ExcludeSemantics(
+                child: Text(
+                  'صُممت للحركة.\nوبُنيت للحضور.',
+                  style: TextStyle(
+                    color: StorefrontColors.onDark,
+                    fontSize: headingSize,
+                    height: 1.22,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(height: StorefrontSpacing.md),
+              Text(
+                'ملابس رياضية عالية الأداء تجمع بين الراحة والقوة وأسلوب آيرون سام الواثق.',
+                style: TextStyle(
+                  color: StorefrontColors.line,
+                  fontSize: compactDesktop ? 14 : 16,
+                  height: 1.7,
+                ),
+              ),
+              SizedBox(
+                height: compactDesktop
+                    ? StorefrontSpacing.lg
+                    : isDesktop
+                    ? StorefrontSpacing.xl
+                    : StorefrontSpacing.lg,
+              ),
+              SizedBox(
+                width: isDesktop ? null : double.infinity,
+                child: FilledButton.icon(
+                  onPressed: onShopPressed,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: StorefrontColors.surface,
+                    foregroundColor: StorefrontColors.ink,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: StorefrontSpacing.lg,
+                      vertical: StorefrontSpacing.md,
+                    ),
+                  ),
+                  iconAlignment: IconAlignment.end,
+                  icon: const Icon(Icons.arrow_downward, size: 20),
+                  label: const Text('تسوق التشكيلة'),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class CatalogSectionHeading extends StatelessWidget {
+  const CatalogSectionHeading({required this.title, super.key});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      header: true,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 600;
+          final titleWidget = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'مختارات آيرون سام',
+                style: TextStyle(
+                  color: StorefrontColors.accent,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: StorefrontSpacing.xs),
+              Text(
+                'تسوق التشكيلة',
+                style: TextStyle(
+                  color: StorefrontColors.ink,
+                  fontSize: compact ? 28 : 36,
+                  height: 1.2,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          );
+          final contextWidget = Text(
+            title == 'الكل' ? 'كل القطع' : 'تشكيلة $title',
+            style: const TextStyle(
+              color: StorefrontColors.mutedInk,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          );
+          if (compact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                titleWidget,
+                const SizedBox(height: StorefrontSpacing.sm),
+                contextWidget,
+              ],
+            );
+          }
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [titleWidget, contextWidget],
+          );
+        },
+      ),
     );
   }
 }
@@ -427,7 +678,7 @@ class FilterBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isWide = constraints.maxWidth >= StorefrontLayout.desktop;
+        final isWide = constraints.maxWidth >= 900;
         final categoryStrip = SizedBox(
           height: 52,
           child: Directionality(
@@ -445,50 +696,18 @@ class FilterBar extends StatelessWidget {
               itemBuilder: (context, index) {
                 final category = categories[index];
                 final active = category == selectedCategory;
-                return ChoiceChip(
-                  label: Text(category, textAlign: TextAlign.right),
+                return _CategoryFilterChip(
+                  label: category,
                   selected: active,
-                  onSelected: (_) => onCategoryChanged(category),
-                  backgroundColor: Colors.white,
-                  selectedColor: inkColor,
-                  side: BorderSide(
-                    color: active ? inkColor : lineColor,
-                    width: active ? 1.4 : 1,
-                  ),
-                  labelStyle: TextStyle(
-                    color: active ? Colors.white : inkColor,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                  labelPadding: const EdgeInsetsDirectional.symmetric(
-                    horizontal: 8,
-                  ),
-                  padding: const EdgeInsetsDirectional.symmetric(
-                    horizontal: 4,
-                    vertical: 6,
-                  ),
-                  visualDensity: VisualDensity.compact,
-                  materialTapTargetSize: MaterialTapTargetSize.padded,
-                  shape: const StadiumBorder(),
-                  showCheckmark: false,
+                  onPressed: () => onCategoryChanged(category),
                 );
               },
             ),
           ),
         );
-        final searchField = Semantics(
-          textField: true,
-          label: 'البحث في المنتجات',
-          child: TextField(
-            focusNode: searchFocusNode,
-            onChanged: onQueryChanged,
-            textInputAction: TextInputAction.search,
-            decoration: const InputDecoration(
-              hintText: 'ابحث عن المنتجات...',
-              prefixIcon: Icon(Icons.search, color: StorefrontColors.mutedInk),
-              contentPadding: EdgeInsets.symmetric(horizontal: 16),
-            ),
-          ),
+        final searchField = _CatalogSearchField(
+          focusNode: searchFocusNode,
+          onChanged: onQueryChanged,
         );
 
         return Container(
@@ -502,7 +721,7 @@ class FilterBar extends StatelessWidget {
                   children: [
                     Expanded(child: categoryStrip),
                     const SizedBox(width: StorefrontSpacing.lg),
-                    SizedBox(width: 320, child: searchField),
+                    SizedBox(width: 360, child: searchField),
                   ],
                 )
               : Column(
@@ -517,6 +736,206 @@ class FilterBar extends StatelessWidget {
       },
     );
   }
+}
+
+class _CategoryFilterChip extends StatefulWidget {
+  const _CategoryFilterChip({
+    required this.label,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  State<_CategoryFilterChip> createState() => _CategoryFilterChipState();
+}
+
+class _CategoryFilterChipState extends State<_CategoryFilterChip> {
+  bool _hovered = false;
+  bool _focused = false;
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = widget.selected;
+    final background = selected
+        ? StorefrontColors.ink
+        : _pressed
+        ? StorefrontColors.surfaceMuted
+        : _hovered
+        ? const Color(0xFFF2EFE9)
+        : StorefrontColors.surface;
+    final duration = StorefrontMotion.resolve(context, StorefrontMotion.fast);
+
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: widget.label,
+      child: AnimatedContainer(
+        duration: duration,
+        curve: StorefrontMotion.curve,
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: const BorderRadius.all(
+            Radius.circular(StorefrontRadius.subtle),
+          ),
+          border: Border.all(
+            color: selected ? StorefrontColors.ink : StorefrontColors.line,
+          ),
+          boxShadow: [
+            if (selected)
+              const BoxShadow(
+                color: StorefrontColors.accent,
+                offset: Offset(0, 3),
+              ),
+            if (_focused)
+              const BoxShadow(
+                color: StorefrontColors.focus,
+                blurRadius: 0,
+                spreadRadius: 2,
+              ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: widget.onPressed,
+            onHover: (value) => setState(() => _hovered = value),
+            onFocusChange: (value) => setState(() => _focused = value),
+            onHighlightChanged: (value) => setState(() => _pressed = value),
+            borderRadius: const BorderRadius.all(
+              Radius.circular(StorefrontRadius.subtle),
+            ),
+            mouseCursor: SystemMouseCursors.click,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 48),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                child: Center(
+                  child: Text(
+                    widget.label,
+                    maxLines: 1,
+                    style: TextStyle(
+                      color: selected
+                          ? StorefrontColors.onDark
+                          : StorefrontColors.ink,
+                      fontSize: 14,
+                      fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CatalogSearchField extends StatefulWidget {
+  const _CatalogSearchField({required this.onChanged, this.focusNode});
+
+  final ValueChanged<String> onChanged;
+  final FocusNode? focusNode;
+
+  @override
+  State<_CatalogSearchField> createState() => _CatalogSearchFieldState();
+}
+
+class _CatalogSearchFieldState extends State<_CatalogSearchField> {
+  late FocusNode _focusNode;
+  late bool _ownsFocusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncFocusNode();
+  }
+
+  @override
+  void didUpdateWidget(covariant _CatalogSearchField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.focusNode == widget.focusNode) return;
+    _focusNode.removeListener(_onFocusChanged);
+    if (_ownsFocusNode) _focusNode.dispose();
+    _syncFocusNode();
+  }
+
+  void _syncFocusNode() {
+    _ownsFocusNode = widget.focusNode == null;
+    _focusNode = widget.focusNode ?? FocusNode();
+    _focusNode.addListener(_onFocusChanged);
+  }
+
+  void _onFocusChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChanged);
+    if (_ownsFocusNode) _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      textField: true,
+      label: 'البحث في المنتجات',
+      child: AnimatedContainer(
+        duration: StorefrontMotion.resolve(context, StorefrontMotion.standard),
+        curve: StorefrontMotion.curve,
+        decoration: BoxDecoration(
+          borderRadius: StorefrontRadius.controlBorder,
+          boxShadow: _focusNode.hasFocus ? StorefrontShadows.subtle : const [],
+        ),
+        child: TextField(
+          focusNode: _focusNode,
+          onChanged: widget.onChanged,
+          textInputAction: TextInputAction.search,
+          decoration: const InputDecoration(
+            hintText: 'ابحث عن المنتجات...',
+            prefixIcon: Icon(Icons.search, color: StorefrontColors.mutedInk),
+            contentPadding: EdgeInsets.symmetric(horizontal: 16),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+int _catalogColumnCount(double width) {
+  if (width >= 1280) return 5;
+  if (width >= 900) return 4;
+  if (width >= 680) return 3;
+  return 2;
+}
+
+double _catalogCrossSpacing(double width) {
+  if (width >= 1280) return StorefrontSpacing.xl;
+  if (width >= 900) return 28;
+  if (width >= 680) return StorefrontSpacing.lg;
+  if (width < StorefrontLayout.narrow) return 10;
+  return StorefrontSpacing.md;
+}
+
+double _catalogMainSpacing(double width) {
+  if (width >= 900) return StorefrontSpacing.xxl;
+  if (width >= 680) return 40;
+  return StorefrontSpacing.xl;
+}
+
+double _catalogCardAspectRatio(double width) {
+  if (width >= 1280) return .64;
+  if (width >= 900) return .62;
+  if (width >= 680) return .58;
+  if (width < StorefrontLayout.narrow) return .52;
+  return .55;
 }
 
 class ProductGrid extends StatelessWidget {
@@ -541,39 +960,17 @@ class ProductGrid extends StatelessWidget {
     }
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isWideDesktop =
-            constraints.maxWidth >= StorefrontLayout.wideDesktop;
-        final isDesktop = constraints.maxWidth >= StorefrontLayout.desktop;
-        final isTablet = constraints.maxWidth >= StorefrontLayout.tablet;
-        final columns = isWideDesktop
-            ? 5
-            : isDesktop
-            ? 4
-            : isTablet
-            ? 3
-            : 2;
-        final compact = constraints.maxWidth < StorefrontLayout.narrow;
+        final width = constraints.maxWidth;
+        final columns = _catalogColumnCount(width);
         return GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: products.length,
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: columns,
-            crossAxisSpacing: isDesktop
-                ? StorefrontSpacing.xl
-                : compact
-                ? 10
-                : StorefrontSpacing.md,
-            mainAxisSpacing: isDesktop
-                ? StorefrontSpacing.section
-                : StorefrontSpacing.xxl,
-            childAspectRatio: columns == 2
-                ? constraints.maxWidth < 500
-                      ? .48
-                      : .49
-                : isDesktop
-                ? .58
-                : .56,
+            crossAxisSpacing: _catalogCrossSpacing(width),
+            mainAxisSpacing: _catalogMainSpacing(width),
+            childAspectRatio: _catalogCardAspectRatio(width),
           ),
           itemBuilder: (context, index) => ProductCard(
             product: products[index],
@@ -688,16 +1085,8 @@ class _CatalogLoadingState extends StatelessWidget {
       label: 'جاري تحميل المنتجات',
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final columns = constraints.maxWidth >= StorefrontLayout.wideDesktop
-              ? 5
-              : constraints.maxWidth >= StorefrontLayout.desktop
-              ? 4
-              : constraints.maxWidth >= StorefrontLayout.tablet
-              ? 3
-              : 2;
-          final gap = constraints.maxWidth < StorefrontLayout.narrow
-              ? 10.0
-              : 16.0;
+          final width = constraints.maxWidth;
+          final columns = _catalogColumnCount(width);
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -709,9 +1098,9 @@ class _CatalogLoadingState extends StatelessWidget {
                 itemCount: columns * 2,
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: columns,
-                  crossAxisSpacing: gap,
-                  mainAxisSpacing: StorefrontSpacing.xl,
-                  childAspectRatio: .58,
+                  crossAxisSpacing: _catalogCrossSpacing(width),
+                  mainAxisSpacing: _catalogMainSpacing(width),
+                  childAspectRatio: _catalogCardAspectRatio(width),
                 ),
                 itemBuilder: (context, index) => ExcludeSemantics(
                   child: TweenAnimationBuilder<double>(
@@ -873,7 +1262,7 @@ class _CatalogStatePanel extends StatelessWidget {
   }
 }
 
-class ProductCard extends StatelessWidget {
+class ProductCard extends StatefulWidget {
   const ProductCard({
     required this.product,
     required this.store,
@@ -885,13 +1274,24 @@ class ProductCard extends StatelessWidget {
   final StoreState store;
   final VoidCallback? onSearchPressed;
 
+  @override
+  State<ProductCard> createState() => _ProductCardState();
+}
+
+class _ProductCardState extends State<ProductCard> {
+  bool _hovered = false;
+  bool _focused = false;
+  bool _pressed = false;
+
+  Product get product => widget.product;
+
   void openDetails(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => ProductDetailsPage(
           product: product,
-          store: store,
-          onSearchPressed: onSearchPressed,
+          store: widget.store,
+          onSearchPressed: widget.onSearchPressed,
         ),
       ),
     );
@@ -899,85 +1299,186 @@ class ProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        AspectRatio(
-          aspectRatio: .8,
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: Material(
-                  color: surfaceColor,
-                  child: InkWell(
-                    onTap: () => openDetails(context),
-                    child: Image.network(
-                      product.imageUrl,
-                      semanticLabel: product.name,
-                      fit: BoxFit.cover,
-                      color: Colors.white.withValues(alpha: .18),
-                      colorBlendMode: BlendMode.saturation,
-                      errorBuilder: (_, _, _) => const Center(
-                        child: Icon(Icons.image_outlined, size: 34),
-                      ),
+    final supportsHover =
+        MediaQuery.sizeOf(context).width >= StorefrontLayout.desktop;
+    final elevated = _focused || (supportsHover && _hovered);
+    final duration = StorefrontMotion.resolve(
+      context,
+      StorefrontMotion.standard,
+    );
+    final status = product.status.trim();
+    final semanticPrice = product.price.toStringAsFixed(0);
+
+    return Semantics(
+      button: true,
+      label:
+          '${product.name}، السعر $semanticPrice دينار ليبي${status.isEmpty ? '' : '، $status'}',
+      onTap: () => openDetails(context),
+      child: ExcludeSemantics(
+        child: AnimatedSlide(
+          duration: duration,
+          curve: StorefrontMotion.curve,
+          offset: elevated ? const Offset(0, -.012) : Offset.zero,
+          child: AnimatedScale(
+            duration: StorefrontMotion.resolve(context, StorefrontMotion.fast),
+            curve: StorefrontMotion.curve,
+            scale: _pressed ? .992 : 1,
+            child: AnimatedContainer(
+              duration: duration,
+              curve: StorefrontMotion.curve,
+              decoration: BoxDecoration(
+                color: StorefrontColors.surface,
+                borderRadius: const BorderRadius.all(
+                  Radius.circular(StorefrontRadius.subtle),
+                ),
+                border: Border.all(
+                  color: _focused
+                      ? StorefrontColors.focus
+                      : StorefrontColors.line,
+                ),
+                boxShadow: [
+                  if (_focused)
+                    const BoxShadow(
+                      color: StorefrontColors.focus,
+                      spreadRadius: 2,
                     ),
+                  if (elevated) ...StorefrontShadows.subtle,
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                borderRadius: const BorderRadius.all(
+                  Radius.circular(StorefrontRadius.subtle),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () => openDetails(context),
+                  onHover: (value) {
+                    if (!supportsHover || _hovered == value) return;
+                    setState(() => _hovered = value);
+                  },
+                  onFocusChange: (value) => setState(() => _focused = value),
+                  onHighlightChanged: (value) =>
+                      setState(() => _pressed = value),
+                  mouseCursor: SystemMouseCursors.click,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final cacheWidth =
+                          (constraints.maxWidth *
+                                  MediaQuery.devicePixelRatioOf(context))
+                              .round();
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(
+                            child: ClipRect(
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  AnimatedScale(
+                                    duration: duration,
+                                    curve: StorefrontMotion.curve,
+                                    scale: supportsHover && _hovered
+                                        ? 1.035
+                                        : 1,
+                                    child: ColoredBox(
+                                      color: StorefrontColors.surfaceMuted,
+                                      child: SafeProductImage(
+                                        url: product.imageUrl,
+                                        fit: BoxFit.cover,
+                                        cacheWidth: cacheWidth,
+                                        filterQuality: FilterQuality.medium,
+                                        semanticLabel: product.name,
+                                        fallback: const Center(
+                                          child: Icon(
+                                            Icons.image_outlined,
+                                            size: 34,
+                                            color: StorefrontColors.mutedInk,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  if (status.isNotEmpty)
+                                    PositionedDirectional(
+                                      top: StorefrontSpacing.sm,
+                                      start: StorefrontSpacing.sm,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: status == 'جديد'
+                                              ? StorefrontColors.accent
+                                              : StorefrontColors.ink.withValues(
+                                                  alpha: .9,
+                                                ),
+                                          borderRadius: const BorderRadius.all(
+                                            Radius.circular(2),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          status,
+                                          style: const TextStyle(
+                                            color: StorefrontColors.onDark,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Tooltip(
+                                  message: product.name,
+                                  child: Text(
+                                    product.name,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: StorefrontColors.ink,
+                                      fontSize:
+                                          MediaQuery.sizeOf(context).width >=
+                                              StorefrontLayout.desktop
+                                          ? 16
+                                          : 14,
+                                      height: 1.45,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: StorefrontSpacing.xs),
+                                Text(
+                                  '${product.price.toStringAsFixed(0)} د.ل',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: StorefrontColors.ink,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ),
-              PositionedDirectional(
-                top: 12,
-                start: 12,
-                child: Container(
-                  color: product.status == 'جديد' ? accentColor : canvasColor,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 5,
-                  ),
-                  child: Text(
-                    product.status,
-                    style: TextStyle(
-                      color: product.status == 'جديد' ? Colors.white : inkColor,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        InkWell(
-          onTap: () => openDetails(context),
-          child: Text(
-            product.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: inkColor,
-              fontSize: MediaQuery.sizeOf(context).width >= 1024 ? 16 : 14,
-              fontWeight: FontWeight.w800,
             ),
           ),
         ),
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                '${product.price.toStringAsFixed(0)} د.ل',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: inkColor,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
+      ),
     );
   }
 }

@@ -110,12 +110,13 @@ void main() {
   testWidgets('catalog cards do not show size metadata', (tester) async {
     const product = Product(
       name: 'Catalog product',
-      category: 'Test',
-      gender: 'Test',
+      category: 'Category metadata',
+      gender: 'Gender metadata',
       price: 100,
       sizes: 'S - XL',
       status: 'Available',
       imageUrl: '',
+      colors: [ProductColor(id: 'black', nameAr: 'Black')],
     );
     final store = StoreState();
     addTearDown(store.dispose);
@@ -132,6 +133,11 @@ void main() {
 
     expect(find.text('Catalog product'), findsOneWidget);
     expect(find.text('S - XL'), findsNothing);
+    expect(find.text('Category metadata'), findsNothing);
+    expect(find.text('Gender metadata'), findsNothing);
+    expect(find.text('Black'), findsNothing);
+    expect(find.byIcon(Icons.favorite_outline), findsNothing);
+    expect(find.byIcon(Icons.add_shopping_cart), findsNothing);
   });
 
   testWidgets('color swatches use real hex values and switch selection', (
@@ -243,8 +249,11 @@ void main() {
 
     expect(find.text('الكل'), findsNWidgets(2));
     expect(find.text('توصيل إلى جميع أنحاء ليبيا'), findsOneWidget);
-    await tester.drag(find.byType(CustomScrollView), const Offset(0, -500));
-    await tester.pump();
+    final catalogCta = find.widgetWithText(FilledButton, 'تسوق التشكيلة');
+    await tester.ensureVisible(catalogCta);
+    await tester.pumpAndSettle();
+    await tester.tap(catalogCta);
+    await tester.pumpAndSettle();
     expect(find.text('تيشيرت الأداء الأساسي'), findsOneWidget);
   });
 
@@ -280,6 +289,64 @@ void main() {
     expect(find.byKey(const ValueKey('catalog-error-state')), findsOneWidget);
     expect(find.text('تعذّر تحميل المنتجات'), findsOneWidget);
     expect(find.text('لا توجد منتجات حاليًا'), findsNothing);
+  });
+
+  testWidgets('catalog uses distinct mobile and desktop hero compositions', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(const MyApp());
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('catalog-hero-mobile')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.binding.setSurfaceSize(const Size(1100, 800));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('catalog-hero-desktop')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('product grid keeps responsive column counts', (tester) async {
+    final store = StoreState();
+    addTearDown(store.dispose);
+    final gridProducts = List<Product>.generate(
+      5,
+      (index) => Product(
+        name: 'Product $index',
+        category: 'Test',
+        gender: 'Test',
+        price: 100,
+        sizes: 'M',
+        status: '',
+        imageUrl: '',
+      ),
+    );
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    for (final expectation in <(double, int)>[
+      (320, 2),
+      (768, 3),
+      (1024, 4),
+      (1440, 5),
+    ]) {
+      await tester.binding.setSurfaceSize(Size(expectation.$1, 900));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: ProductGrid(products: gridProducts, store: store),
+            ),
+          ),
+        ),
+      );
+      final grid = tester.widget<GridView>(find.byType(GridView));
+      final delegate =
+          grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
+      expect(delegate.crossAxisCount, expectation.$2);
+      expect(tester.takeException(), isNull);
+    }
   });
 
   testWidgets('adding a product updates the cart badge', (tester) async {

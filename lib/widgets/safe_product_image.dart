@@ -12,6 +12,7 @@ class SafeProductImage extends StatelessWidget {
     this.colorBlendMode,
     this.width,
     this.height,
+    this.semanticLabel,
     this.fallback,
     super.key,
   });
@@ -24,6 +25,7 @@ class SafeProductImage extends StatelessWidget {
   final BlendMode? colorBlendMode;
   final double? width;
   final double? height;
+  final String? semanticLabel;
   final Widget? fallback;
 
   Widget get _fallback => fallback ?? const Icon(Icons.image_outlined);
@@ -42,6 +44,7 @@ class SafeProductImage extends StatelessWidget {
       colorBlendMode: colorBlendMode,
       width: width,
       height: height,
+      semanticLabel: semanticLabel,
       errorBuilder: (_, _, _) => _fallback,
     );
   }
