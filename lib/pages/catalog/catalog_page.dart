@@ -195,6 +195,9 @@ class _CatalogPageState extends State<CatalogPage> {
                       final horizontalPadding = StorefrontLayout.gutterFor(
                         constraints.maxWidth,
                       );
+                      final shortMobileViewport =
+                          constraints.maxWidth < 600 &&
+                          constraints.maxHeight < 520;
                       final content = ConstrainedBox(
                         constraints: const BoxConstraints(
                           maxWidth: StorefrontLayout.contentMaxWidth,
@@ -225,8 +228,10 @@ class _CatalogPageState extends State<CatalogPage> {
                         ),
                       );
                       return Padding(
-                        padding: const EdgeInsets.only(
-                          top: StorefrontSpacing.xl,
+                        padding: EdgeInsets.only(
+                          top: shortMobileViewport
+                              ? StorefrontSpacing.xs
+                              : StorefrontSpacing.xl,
                           bottom: StorefrontSpacing.section,
                         ),
                         child: CustomScrollView(

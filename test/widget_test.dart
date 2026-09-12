@@ -458,6 +458,62 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('mobile hero CTA is visible above the fold on supported phones', (
+    tester,
+  ) async {
+    const viewports = <Size>[
+      Size(320, 568),
+      Size(360, 640),
+      Size(375, 667),
+      Size(390, 844),
+      Size(393, 873),
+      Size(412, 915),
+      Size(430, 932),
+    ];
+    addTearDown(() {
+      tester.binding.setSurfaceSize(null);
+      tester.view.resetPadding();
+    });
+
+    for (final viewport in viewports) {
+      final safePadding = viewport == const Size(320, 568)
+          ? const FakeViewPadding(top: 24, bottom: 16)
+          : FakeViewPadding.zero;
+      tester.view.padding = safePadding;
+      await tester.binding.setSurfaceSize(viewport);
+      await tester.pumpWidget(const MyApp());
+      await tester.pumpAndSettle();
+
+      final cta = find.byKey(const ValueKey('catalog-hero-cta'));
+      final image = find.byKey(const ValueKey('catalog-hero-mobile-image'));
+      expect(cta, findsOneWidget, reason: 'CTA missing at $viewport');
+      expect(
+        image,
+        findsOneWidget,
+        reason: 'Mobile image missing at $viewport',
+      );
+
+      final ctaRect = tester.getRect(cta);
+      final imageRect = tester.getRect(image);
+      expect(
+        ctaRect.top,
+        greaterThanOrEqualTo(safePadding.top),
+        reason: 'CTA overlaps the safe area at $viewport',
+      );
+      expect(
+        ctaRect.bottom,
+        lessThanOrEqualTo(viewport.height - safePadding.bottom),
+        reason: 'CTA falls below the initial viewport at $viewport: $ctaRect',
+      );
+      expect(
+        ctaRect.bottom,
+        lessThanOrEqualTo(imageRect.top),
+        reason: 'Supporting image precedes the CTA at $viewport',
+      );
+      expect(tester.takeException(), isNull, reason: 'Overflow at $viewport');
+    }
+  });
+
   testWidgets('product grid keeps responsive column counts', (tester) async {
     final store = StoreState();
     addTearDown(store.dispose);

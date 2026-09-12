@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
@@ -356,6 +358,13 @@ class PageIntro extends StatelessWidget {
       builder: (context, constraints) {
         final isDesktop = constraints.maxWidth >= 900;
         final isTablet = constraints.maxWidth >= 600;
+        final isPhone = !isTablet;
+        final mediaQuery = MediaQuery.of(context);
+        final usableViewportHeight = math.max(
+          0.0,
+          mediaQuery.size.height - mediaQuery.padding.vertical,
+        );
+        final compactMobile = isPhone && usableViewportHeight < 700;
         final product = featuredProduct;
         final image = _HeroImage(
           product: product,
@@ -368,7 +377,14 @@ class PageIntro extends StatelessWidget {
           onShopPressed: onShopPressed,
           isDesktop: isDesktop,
           isNarrow: constraints.maxWidth < StorefrontLayout.narrow,
+          compactMobile: compactMobile,
         );
+        final phoneImageHeight = math
+            .min(
+              constraints.maxWidth / (compactMobile ? 1.5 : 1.16),
+              usableViewportHeight * (compactMobile ? .31 : .38),
+            )
+            .clamp(168.0, 344.0);
 
         return Semantics(
           container: true,
@@ -400,13 +416,16 @@ class PageIntro extends StatelessWidget {
                 : Column(
                     key: const ValueKey('catalog-hero-mobile'),
                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      AspectRatio(
-                        aspectRatio: isTablet ? 1.72 : 1.05,
-                        child: image,
-                      ),
-                      copy,
-                    ],
+                    children: isPhone
+                        ? [
+                            copy,
+                            SizedBox(
+                              key: const ValueKey('catalog-hero-mobile-image'),
+                              height: phoneImageHeight,
+                              child: image,
+                            ),
+                          ]
+                        : [AspectRatio(aspectRatio: 1.72, child: image), copy],
                   ),
           ),
         );
@@ -483,12 +502,14 @@ class _HeroCopy extends StatelessWidget {
     required this.onShopPressed,
     required this.isDesktop,
     required this.isNarrow,
+    required this.compactMobile,
   });
 
   final String title;
   final VoidCallback onShopPressed;
   final bool isDesktop;
   final bool isNarrow;
+  final bool compactMobile;
 
   @override
   Widget build(BuildContext context) {
@@ -499,6 +520,10 @@ class _HeroCopy extends StatelessWidget {
             ? compactDesktop
                   ? 38.0
                   : 52.0
+            : compactMobile
+            ? isNarrow
+                  ? 31.0
+                  : 34.0
             : isNarrow
             ? 34.0
             : 40.0;
@@ -506,6 +531,8 @@ class _HeroCopy extends StatelessWidget {
             ? StorefrontSpacing.xl
             : isDesktop
             ? StorefrontSpacing.xxl
+            : compactMobile
+            ? StorefrontSpacing.md
             : isNarrow
             ? StorefrontSpacing.md
             : StorefrontSpacing.lg;
@@ -513,6 +540,8 @@ class _HeroCopy extends StatelessWidget {
             ? StorefrontSpacing.xl
             : isDesktop
             ? StorefrontSpacing.xxl
+            : compactMobile
+            ? StorefrontSpacing.sm
             : StorefrontSpacing.xl;
 
         return Container(
@@ -538,6 +567,8 @@ class _HeroCopy extends StatelessWidget {
                     ? StorefrontSpacing.md
                     : isDesktop
                     ? StorefrontSpacing.lg
+                    : compactMobile
+                    ? StorefrontSpacing.sm
                     : StorefrontSpacing.md,
               ),
               ExcludeSemantics(
@@ -546,18 +577,22 @@ class _HeroCopy extends StatelessWidget {
                   style: TextStyle(
                     color: StorefrontColors.onDark,
                     fontSize: headingSize,
-                    height: 1.22,
+                    height: compactMobile ? 1.18 : 1.22,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
               ),
-              const SizedBox(height: StorefrontSpacing.md),
+              SizedBox(
+                height: compactMobile
+                    ? StorefrontSpacing.sm
+                    : StorefrontSpacing.md,
+              ),
               Text(
                 'ملابس رياضية عالية الأداء تجمع بين الراحة والقوة وأسلوب آيرون سام الواثق.',
                 style: TextStyle(
                   color: StorefrontColors.line,
-                  fontSize: compactDesktop ? 14 : 16,
-                  height: 1.7,
+                  fontSize: compactDesktop || compactMobile ? 14 : 16,
+                  height: compactMobile ? 1.55 : 1.7,
                 ),
               ),
               SizedBox(
@@ -565,18 +600,21 @@ class _HeroCopy extends StatelessWidget {
                     ? StorefrontSpacing.lg
                     : isDesktop
                     ? StorefrontSpacing.xl
+                    : compactMobile
+                    ? StorefrontSpacing.md
                     : StorefrontSpacing.lg,
               ),
               SizedBox(
                 width: isDesktop ? null : double.infinity,
                 child: FilledButton.icon(
+                  key: const ValueKey('catalog-hero-cta'),
                   onPressed: onShopPressed,
                   style: FilledButton.styleFrom(
                     backgroundColor: StorefrontColors.surface,
                     foregroundColor: StorefrontColors.ink,
-                    padding: const EdgeInsets.symmetric(
+                    padding: EdgeInsets.symmetric(
                       horizontal: StorefrontSpacing.lg,
-                      vertical: StorefrontSpacing.md,
+                      vertical: compactMobile ? 13 : StorefrontSpacing.md,
                     ),
                   ),
                   iconAlignment: IconAlignment.end,
