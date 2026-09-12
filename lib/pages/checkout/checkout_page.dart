@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/theme/storefront_theme.dart';
 import '../../data/models/order.dart';
 import '../../features/cart/cart_state.dart';
 import '../../features/order/whatsapp_order_service.dart';
@@ -173,66 +174,103 @@ class _CheckoutPageState extends State<CheckoutPage> {
   @override
   Widget build(BuildContext context) {
     if (submitted) {
-      return Directionality(
-        textDirection: TextDirection.rtl,
-        child: Scaffold(
-          body: _OrderSuccessView(
-            total: submittedTotal,
-            onReturn: () =>
-                Navigator.of(context).popUntil((route) => route.isFirst),
+      return StorefrontTheme(
+        child: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Scaffold(
+            body: _OrderSuccessView(
+              total: submittedTotal,
+              onReturn: () =>
+                  Navigator.of(context).popUntil((route) => route.isFirst),
+            ),
           ),
         ),
       );
     }
 
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final isWide = constraints.maxWidth >= 950;
-          return Scaffold(
-            appBar: AppBar(
-              leading: IconButton(
-                tooltip: 'العودة للسلة',
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.arrow_forward),
-              ),
-              title: const Text(
-                'إتمام الطلب',
-                style: TextStyle(fontWeight: FontWeight.w900),
-              ),
-              actions: [
-                IconButton(
-                  tooltip: 'سلة التسوق',
+    return StorefrontTheme(
+      child: Directionality(
+        textDirection: TextDirection.rtl,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isWide = constraints.maxWidth >= 950;
+            return Scaffold(
+              appBar: AppBar(
+                leading: IconButton(
+                  tooltip: 'العودة للسلة',
                   onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.shopping_bag_outlined),
+                  icon: const Icon(Icons.arrow_forward),
                 ),
-              ],
-            ),
-            body: Form(
-              key: formKey,
-              child: SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(
-                  constraints.maxWidth >= 1100 ? 48 : 16,
-                  24,
-                  constraints.maxWidth >= 1100 ? 48 : 16,
-                  isWide ? 48 : 120,
+                title: const Text(
+                  'إتمام الطلب',
+                  style: TextStyle(fontWeight: FontWeight.w900),
                 ),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1240),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const _CheckoutHeading(),
-                        const SizedBox(height: 30),
-                        isWide
-                            ? Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(
-                                    flex: 7,
-                                    child: _CheckoutForm(
+                actions: [
+                  IconButton(
+                    tooltip: 'سلة التسوق',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.shopping_bag_outlined),
+                  ),
+                ],
+              ),
+              body: Form(
+                key: formKey,
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(
+                    StorefrontLayout.gutterFor(constraints.maxWidth),
+                    StorefrontSpacing.xl,
+                    StorefrontLayout.gutterFor(constraints.maxWidth),
+                    (isWide ? StorefrontSpacing.section : 120) +
+                        MediaQuery.paddingOf(context).bottom,
+                  ),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1240),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const _CheckoutHeading(),
+                          const SizedBox(height: 30),
+                          isWide
+                              ? Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      flex: 7,
+                                      child: _CheckoutForm(
+                                        fullNameController: fullNameController,
+                                        phoneController: phoneController,
+                                        addressController: addressController,
+                                        notesController: notesController,
+                                        city: city,
+                                        cities: cities,
+                                        onCityChanged: (value) =>
+                                            setState(() => city = value),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 48),
+                                    Expanded(
+                                      flex: 5,
+                                      child: _OrderSummary(
+                                        store: widget.store,
+                                        discount: discount,
+                                        discountPercent:
+                                            widget.store.discountPercent,
+                                        total: total,
+                                        discountApplied:
+                                            widget.store.hasDiscount,
+                                        onConfirm: confirmOrder,
+                                        loading: openingWhatsApp,
+                                        retryAvailable: savedOrder != null,
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    _CheckoutForm(
                                       fullNameController: fullNameController,
                                       phoneController: phoneController,
                                       addressController: addressController,
@@ -242,11 +280,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
                                       onCityChanged: (value) =>
                                           setState(() => city = value),
                                     ),
-                                  ),
-                                  const SizedBox(width: 48),
-                                  Expanded(
-                                    flex: 5,
-                                    child: _OrderSummary(
+                                    const SizedBox(height: 30),
+                                    _OrderSummary(
                                       store: widget.store,
                                       discount: discount,
                                       discountPercent:
@@ -257,44 +292,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
                                       loading: openingWhatsApp,
                                       retryAvailable: savedOrder != null,
                                     ),
-                                  ),
-                                ],
-                              )
-                            : Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  _CheckoutForm(
-                                    fullNameController: fullNameController,
-                                    phoneController: phoneController,
-                                    addressController: addressController,
-                                    notesController: notesController,
-                                    city: city,
-                                    cities: cities,
-                                    onCityChanged: (value) =>
-                                        setState(() => city = value),
-                                  ),
-                                  const SizedBox(height: 30),
-                                  _OrderSummary(
-                                    store: widget.store,
-                                    discount: discount,
-                                    discountPercent:
-                                        widget.store.discountPercent,
-                                    total: total,
-                                    discountApplied: widget.store.hasDiscount,
-                                    onConfirm: confirmOrder,
-                                    loading: openingWhatsApp,
-                                    retryAvailable: savedOrder != null,
-                                  ),
-                                ],
-                              ),
-                      ],
+                                  ],
+                                ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
@@ -305,26 +313,31 @@ class _CheckoutHeading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        RichText(
-          text: const TextSpan(
-            style: TextStyle(
-              color: inkColor,
-              fontSize: 42,
-              fontWeight: FontWeight.w900,
-            ),
-            children: [
-              TextSpan(text: 'إتمام الطلب'),
-              TextSpan(
-                text: '.',
-                style: TextStyle(color: accentColor),
+    return LayoutBuilder(
+      builder: (context, constraints) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          RichText(
+            text: TextSpan(
+              style: TextStyle(
+                color: inkColor,
+                fontSize: constraints.maxWidth < StorefrontLayout.narrow
+                    ? 30
+                    : 40,
+                height: 1.2,
+                fontWeight: FontWeight.w900,
               ),
-            ],
+              children: const [
+                TextSpan(text: 'إتمام الطلب'),
+                TextSpan(
+                  text: '.',
+                  style: TextStyle(color: accentColor),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -377,6 +390,7 @@ class _CheckoutForm extends StatelessWidget {
                       : constraints.maxWidth,
                   child: TextFormField(
                     controller: fullNameController,
+                    autofillHints: const [AutofillHints.name],
                     textInputAction: TextInputAction.next,
                     decoration: decoration('الاسم الكامل *', 'محمد أحمد علي'),
                     validator: (value) =>
@@ -391,6 +405,7 @@ class _CheckoutForm extends StatelessWidget {
                       : constraints.maxWidth,
                   child: TextFormField(
                     controller: phoneController,
+                    autofillHints: const [AutofillHints.telephoneNumber],
                     keyboardType: TextInputType.phone,
                     textDirection: TextDirection.ltr,
                     decoration: decoration('رقم الهاتف *', '09XXXXXXXX'),
@@ -423,6 +438,7 @@ class _CheckoutForm extends StatelessWidget {
                   width: constraints.maxWidth,
                   child: TextFormField(
                     controller: addressController,
+                    autofillHints: const [AutofillHints.fullStreetAddress],
                     maxLines: 2,
                     textInputAction: TextInputAction.next,
                     decoration: decoration(
@@ -499,8 +515,15 @@ class _OrderSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(24),
-      color: surfaceColor.withValues(alpha: .3),
+      padding: EdgeInsets.all(
+        MediaQuery.sizeOf(context).width < StorefrontLayout.narrow ? 16 : 24,
+      ),
+      decoration: const BoxDecoration(
+        color: StorefrontColors.surface,
+        borderRadius: StorefrontRadius.surfaceBorder,
+        border: Border.fromBorderSide(BorderSide(color: StorefrontColors.line)),
+        boxShadow: StorefrontShadows.subtle,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -524,7 +547,10 @@ class _OrderSummary extends StatelessWidget {
                 children: [
                   const Text(
                     'كود الخصم',
-                    style: TextStyle(color: Colors.black54, fontSize: 12),
+                    style: TextStyle(
+                      color: StorefrontColors.mutedInk,
+                      fontSize: 12,
+                    ),
                   ),
                   Text(
                     store.discountCode!,
@@ -574,8 +600,8 @@ class _OrderSummary extends StatelessWidget {
                           Text(
                             '${entry.colorName == null ? '' : 'اللون: ${entry.colorName} · '}مقاس: ${entry.size} · كمية: ${entry.value}',
                             style: const TextStyle(
-                              color: Colors.black54,
-                              fontSize: 10,
+                              color: StorefrontColors.mutedInk,
+                              fontSize: 12,
                             ),
                           ),
                         ],
@@ -584,7 +610,7 @@ class _OrderSummary extends StatelessWidget {
                     Text(
                       '${(entry.key.price * entry.value).toStringAsFixed(2)} د.ل',
                       style: const TextStyle(
-                        fontSize: 12,
+                        fontSize: 13,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -605,12 +631,17 @@ class _OrderSummary extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 10),
-          const Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          const Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            spacing: StorefrontSpacing.md,
+            runSpacing: StorefrontSpacing.xs,
             children: [
               Text(
                 'التوصيل',
-                style: TextStyle(color: Colors.black54, fontSize: 13),
+                style: TextStyle(
+                  color: StorefrontColors.mutedInk,
+                  fontSize: 13,
+                ),
               ),
               Text(
                 'يحدد حسب المدينة',
@@ -634,8 +665,8 @@ class _OrderSummary extends StatelessWidget {
             'دفع عند الاستلام · توصيل سريع',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: Colors.black45,
-              fontSize: 10,
+              color: StorefrontColors.mutedInk,
+              fontSize: 12,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -662,11 +693,6 @@ class _ConfirmButton extends StatelessWidget {
       width: double.infinity,
       height: 56,
       child: FilledButton.icon(
-        style: FilledButton.styleFrom(
-          backgroundColor: inkColor,
-          foregroundColor: Colors.white,
-          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-        ),
         onPressed: loading ? null : onPressed,
         icon: loading
             ? const SizedBox(
@@ -706,7 +732,14 @@ class _OrderSuccessView extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 520),
           child: Container(
             padding: const EdgeInsets.all(32),
-            color: surfaceColor.withValues(alpha: .3),
+            decoration: const BoxDecoration(
+              color: StorefrontColors.surface,
+              borderRadius: StorefrontRadius.surfaceBorder,
+              border: Border.fromBorderSide(
+                BorderSide(color: StorefrontColors.line),
+              ),
+              boxShadow: StorefrontShadows.raised,
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -725,7 +758,10 @@ class _OrderSuccessView extends StatelessWidget {
                 const Text(
                   'سنتواصل معك قريبًا لتأكيد تفاصيل التوصيل.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.black54, fontSize: 13),
+                  style: TextStyle(
+                    color: StorefrontColors.mutedInk,
+                    fontSize: 14,
+                  ),
                 ),
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 24),
@@ -734,8 +770,8 @@ class _OrderSuccessView extends StatelessWidget {
                 const Text(
                   'إجمالي الطلب',
                   style: TextStyle(
-                    color: Colors.black54,
-                    fontSize: 11,
+                    color: StorefrontColors.mutedInk,
+                    fontSize: 12,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -751,8 +787,8 @@ class _OrderSuccessView extends StatelessWidget {
                 const Text(
                   'الدفع عند الاستلام',
                   style: TextStyle(
-                    color: Colors.black54,
-                    fontSize: 11,
+                    color: StorefrontColors.mutedInk,
+                    fontSize: 12,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -761,13 +797,6 @@ class _OrderSuccessView extends StatelessWidget {
                   width: double.infinity,
                   height: 56,
                   child: FilledButton(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: inkColor,
-                      foregroundColor: Colors.white,
-                      shape: const RoundedRectangleBorder(
-                        borderRadius: BorderRadius.zero,
-                      ),
-                    ),
                     onPressed: onReturn,
                     child: const Text('العودة إلى التسوق'),
                   ),
@@ -796,30 +825,47 @@ class _TotalRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            color: accent
-                ? accentColor
-                : large
-                ? inkColor
-                : Colors.black54,
-            fontSize: large ? 18 : 13,
-            fontWeight: large ? FontWeight.w900 : FontWeight.w600,
-          ),
-        ),
-        Text(
-          '${value.toStringAsFixed(2)} د.ل',
-          style: TextStyle(
-            color: accent ? accentColor : inkColor,
-            fontSize: large ? 18 : 13,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-      ],
+    final labelWidget = Text(
+      label,
+      style: TextStyle(
+        color: accent
+            ? accentColor
+            : large
+            ? inkColor
+            : StorefrontColors.mutedInk,
+        fontSize: large ? 18 : 13,
+        fontWeight: large ? FontWeight.w900 : FontWeight.w600,
+      ),
+    );
+    final valueWidget = Text(
+      '${value.toStringAsFixed(2)} د.ل',
+      textDirection: TextDirection.rtl,
+      style: TextStyle(
+        color: accent ? accentColor : inkColor,
+        fontSize: large ? 18 : 13,
+        fontWeight: FontWeight.w900,
+      ),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 300) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              labelWidget,
+              const SizedBox(height: StorefrontSpacing.xxs),
+              Align(
+                alignment: AlignmentDirectional.centerEnd,
+                child: valueWidget,
+              ),
+            ],
+          );
+        }
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [labelWidget, valueWidget],
+        );
+      },
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/theme/storefront_theme.dart';
 import '../../data/models/product.dart';
 import '../../features/cart/cart_state.dart';
 import '../../core/utils/hex_color.dart';
@@ -35,7 +36,10 @@ class _ProductColorSwatch extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
+              duration: StorefrontMotion.resolve(
+                context,
+                StorefrontMotion.standard,
+              ),
               curve: Curves.easeOut,
               padding: const EdgeInsets.all(3),
               decoration: BoxDecoration(
@@ -55,7 +59,10 @@ class _ProductColorSwatch extends StatelessWidget {
                     : null,
               ),
               child: AnimatedScale(
-                duration: const Duration(milliseconds: 180),
+                duration: StorefrontMotion.resolve(
+                  context,
+                  StorefrontMotion.standard,
+                ),
                 curve: Curves.easeOut,
                 scale: selected ? 1.06 : 1,
                 child: Material(
@@ -77,7 +84,7 @@ class _ProductColorSwatch extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: selected ? FontWeight.w900 : FontWeight.w600,
-                color: selected ? inkColor : Colors.black54,
+                color: selected ? inkColor : StorefrontColors.mutedInk,
               ),
             ),
           ],
@@ -159,8 +166,8 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
     if (!_galleryController.hasClients) return;
     _galleryController.animateToPage(
       index,
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOut,
+      duration: StorefrontMotion.resolve(context, StorefrontMotion.deliberate),
+      curve: StorefrontMotion.curve,
     );
   }
 
@@ -279,7 +286,10 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                       height: 24,
                       child: Center(
                         child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 160),
+                          duration: StorefrontMotion.resolve(
+                            context,
+                            StorefrontMotion.fast,
+                          ),
                           curve: Curves.easeOut,
                           width: index == _galleryIndex ? 18 : 6,
                           height: 6,
@@ -300,7 +310,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                 key: const ValueKey('product-gallery-counter'),
                 textDirection: TextDirection.ltr,
                 style: const TextStyle(
-                  color: Colors.black54,
+                  color: StorefrontColors.mutedInk,
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),
@@ -327,7 +337,10 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                         ),
                         onTap: () => _selectGalleryImage(entry.key),
                         child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 160),
+                          duration: StorefrontMotion.resolve(
+                            context,
+                            StorefrontMotion.fast,
+                          ),
                           padding: const EdgeInsets.all(2),
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(3),
@@ -395,6 +408,12 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
               item.size == selectedSize,
         )
         .fold<int>(0, (sum, item) => sum + item.quantity);
+    final selectedStock = selectedSize == null
+        ? 0
+        : product.stockFor(selectedSize, colorId: selectedColor);
+    final optionsSelected =
+        (colors.length <= 1 || selectedColor != null) &&
+        (sizes.length <= 1 || selectedSize != null);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -412,7 +431,10 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
           const SizedBox(height: 18),
           Text(
             product.description,
-            style: const TextStyle(color: Colors.black54, height: 1.8),
+            style: const TextStyle(
+              color: StorefrontColors.mutedInk,
+              height: 1.8,
+            ),
           ),
         ],
         if (colors.isNotEmpty) ...[
@@ -481,11 +503,14 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
-                    onPressed: () => store.remove(
-                      product,
-                      size: selectedSize,
-                      colorId: selectedColor,
-                    ),
+                    tooltip: 'إنقاص الكمية',
+                    onPressed: quantity > 0
+                        ? () => store.remove(
+                            product,
+                            size: selectedSize,
+                            colorId: selectedColor,
+                          )
+                        : null,
                     icon: const Icon(Icons.remove),
                   ),
                   SizedBox(
@@ -498,11 +523,14 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                     ),
                   ),
                   IconButton(
-                    onPressed: () => store.add(
-                      product,
-                      size: selectedSize,
-                      colorId: selectedColor,
-                    ),
+                    tooltip: 'زيادة الكمية',
+                    onPressed: optionsSelected && quantity < selectedStock
+                        ? () => store.add(
+                            product,
+                            size: selectedSize,
+                            colorId: selectedColor,
+                          )
+                        : null,
                     icon: const Icon(Icons.add),
                   ),
                 ],
@@ -550,92 +578,100 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        appBar: PreferredSize(
-          preferredSize: const Size.fromHeight(76),
-          child: _ProductDetailsHeader(
-            store: store,
-            onSearchPressed: _openSearch,
+    return StorefrontTheme(
+      child: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          appBar: PreferredSize(
+            preferredSize: const Size.fromHeight(76),
+            child: _ProductDetailsHeader(
+              store: store,
+              onSearchPressed: _openSearch,
+            ),
           ),
-        ),
-        body: AnimatedBuilder(
-          animation: store,
-          builder: (context, _) {
-            final colors = product.activeColors;
-            final selectedColor = store.colorFor(product);
-            final sizes = product.sizeOptionsForColor(selectedColor);
-            final selectedSize = store.selectedSizeFor(product);
-            final galleryImages = product.imagesForColor(selectedColor);
-            _syncGallery(galleryImages, selectedColor);
-            return LayoutBuilder(
-              builder: (context, constraints) {
-                final isDesktop = constraints.maxWidth >= 960;
-                final gallery = _gallery(galleryImages, isDesktop: isDesktop);
-                final information = Directionality(
-                  textDirection: TextDirection.rtl,
-                  child: _productInformation(
-                    colors: colors,
-                    selectedColor: selectedColor,
-                    sizes: sizes,
-                    selectedSize: selectedSize,
-                  ),
-                );
-                final content = isDesktop
-                    ? Row(
-                        textDirection: TextDirection.ltr,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(flex: 58, child: gallery),
-                          const SizedBox(width: 48),
-                          Expanded(flex: 42, child: information),
-                        ],
-                      )
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          gallery,
-                          const SizedBox(height: 28),
-                          information,
-                        ],
-                      );
-                return SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 36),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 1280),
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: Column(
+          body: AnimatedBuilder(
+            animation: store,
+            builder: (context, _) {
+              final colors = product.activeColors;
+              final selectedColor = store.colorFor(product);
+              final sizes = product.sizeOptionsForColor(selectedColor);
+              final selectedSize = store.selectedSizeFor(product);
+              final galleryImages = product.imagesForColor(selectedColor);
+              _syncGallery(galleryImages, selectedColor);
+              return LayoutBuilder(
+                builder: (context, constraints) {
+                  final isDesktop = constraints.maxWidth >= 960;
+                  final gallery = _gallery(galleryImages, isDesktop: isDesktop);
+                  final information = Directionality(
+                    textDirection: TextDirection.rtl,
+                    child: _productInformation(
+                      colors: colors,
+                      selectedColor: selectedColor,
+                      sizes: sizes,
+                      selectedSize: selectedSize,
+                    ),
+                  );
+                  final content = isDesktop
+                      ? Row(
+                          textDirection: TextDirection.ltr,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(flex: 58, child: gallery),
+                            const SizedBox(width: 48),
+                            Expanded(flex: 42, child: information),
+                          ],
+                        )
+                      : Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Align(
-                              alignment: AlignmentDirectional.centerStart,
-                              child: Material(
-                                color: surfaceColor,
-                                shape: const CircleBorder(
-                                  side: BorderSide(color: lineColor),
-                                ),
-                                child: IconButton(
-                                  key: const ValueKey('product-details-back'),
-                                  tooltip: 'رجوع',
-                                  onPressed: _goBack,
-                                  icon: const BackButtonIcon(),
+                            gallery,
+                            const SizedBox(height: 28),
+                            information,
+                          ],
+                        );
+                  return SingleChildScrollView(
+                    padding: EdgeInsets.fromLTRB(
+                      StorefrontLayout.gutterFor(constraints.maxWidth),
+                      StorefrontSpacing.lg,
+                      StorefrontLayout.gutterFor(constraints.maxWidth),
+                      StorefrontSpacing.xxl +
+                          MediaQuery.paddingOf(context).bottom,
+                    ),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 1280),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Align(
+                                alignment: AlignmentDirectional.centerStart,
+                                child: Material(
+                                  color: surfaceColor,
+                                  shape: const CircleBorder(
+                                    side: BorderSide(color: lineColor),
+                                  ),
+                                  child: IconButton(
+                                    key: const ValueKey('product-details-back'),
+                                    tooltip: 'رجوع',
+                                    onPressed: _goBack,
+                                    icon: const BackButtonIcon(),
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 16),
-                            content,
-                          ],
+                              const SizedBox(height: 16),
+                              content,
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                );
-              },
-            );
-          },
+                  );
+                },
+              );
+            },
+          ),
         ),
       ),
     );
@@ -656,11 +692,13 @@ class _ProductDetailsHeader extends StatelessWidget {
     return Container(
       height: 76,
       decoration: const BoxDecoration(
-        color: canvasColor,
+        color: StorefrontColors.surface,
         border: Border(bottom: BorderSide(color: lineColor)),
       ),
       padding: EdgeInsets.symmetric(
-        horizontal: MediaQuery.sizeOf(context).width >= 1100 ? 48 : 16,
+        horizontal: StorefrontLayout.gutterFor(
+          MediaQuery.sizeOf(context).width,
+        ),
       ),
       child: Stack(
         children: [
@@ -669,6 +707,7 @@ class _ProductDetailsHeader extends StatelessWidget {
             child: Image(
               key: ValueKey('product-details-logo'),
               image: AssetImage('assets/images/iron_sam_logo.png'),
+              semanticLabel: 'آيرون سام',
               width: 104,
               height: 60,
               fit: BoxFit.contain,
@@ -722,18 +761,29 @@ class _ProductCartAction extends StatelessWidget {
           Positioned(
             top: 2,
             right: 2,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-              decoration: const BoxDecoration(
-                color: accentColor,
-                shape: BoxShape.circle,
-              ),
-              child: Text(
-                '${store.itemCount}',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w700,
+            child: Semantics(
+              liveRegion: true,
+              label: 'عدد المنتجات في السلة: ${store.itemCount}',
+              child: ExcludeSemantics(
+                child: Container(
+                  constraints: const BoxConstraints(
+                    minWidth: 18,
+                    minHeight: 18,
+                  ),
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(horizontal: 5),
+                  decoration: const BoxDecoration(
+                    color: accentColor,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    '${store.itemCount}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
               ),
             ),

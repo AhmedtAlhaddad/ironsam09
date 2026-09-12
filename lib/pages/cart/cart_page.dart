@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/theme/storefront_theme.dart';
 import '../../data/models/product.dart';
 import '../../features/cart/cart_state.dart';
 import '../checkout/checkout_page.dart';
@@ -20,142 +21,142 @@ class CartPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        appBar: AppBar(
-          leading: IconButton(
-            tooltip: 'العودة للتسوق',
-            onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(Icons.arrow_forward),
-          ),
-          title: const Text(
-            'سلة التسوق',
-            style: TextStyle(fontWeight: FontWeight.w900),
-          ),
-          actions: [
-            AnimatedBuilder(
-              animation: store,
-              builder: (context, _) => Padding(
-                padding: const EdgeInsetsDirectional.only(end: 16),
-                child: Center(
-                  child: Text(
-                    '${store.itemCount} منتجات',
-                    style: const TextStyle(
-                      color: Colors.black54,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
+    return StorefrontTheme(
+      child: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          appBar: AppBar(
+            leading: IconButton(
+              tooltip: 'العودة للتسوق',
+              onPressed: () => Navigator.of(context).pop(),
+              icon: const Icon(Icons.arrow_forward),
+            ),
+            title: const Text(
+              'سلة التسوق',
+              style: TextStyle(fontWeight: FontWeight.w900),
+            ),
+            actions: [
+              AnimatedBuilder(
+                animation: store,
+                builder: (context, _) => Padding(
+                  padding: const EdgeInsetsDirectional.only(end: 16),
+                  child: Center(
+                    child: Text(
+                      '${store.itemCount} منتجات',
+                      style: const TextStyle(
+                        color: StorefrontColors.mutedInk,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
-        ),
-        body: AnimatedBuilder(
-          animation: store,
-          builder: (context, _) {
-            if (store.items.isEmpty) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.shopping_bag_outlined, size: 42),
-                      const SizedBox(height: 14),
-                      const Text(
-                        'السلة فارغة حاليًا.',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
+            ],
+          ),
+          body: AnimatedBuilder(
+            animation: store,
+            builder: (context, _) {
+              if (store.items.isEmpty) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.shopping_bag_outlined,
+                          size: 42,
+                          color: StorefrontColors.mutedInk,
                         ),
-                      ),
-                      const SizedBox(height: 18),
-                      FilledButton(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: inkColor,
-                          foregroundColor: Colors.white,
-                          shape: const RoundedRectangleBorder(
-                            borderRadius: BorderRadius.zero,
+                        const SizedBox(height: 14),
+                        const Text(
+                          'السلة فارغة حاليًا.',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
+                        const SizedBox(height: 18),
+                        FilledButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('العودة للتسوق'),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+
+              return LayoutBuilder(
+                builder: (context, constraints) {
+                  final isWide = constraints.maxWidth >= 900;
+                  final items = Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      ...store.items.map(
+                        (entry) => _CartRow(
+                          product: entry.key,
+                          size: entry.size,
+                          colorName: entry.colorName,
+                          colorId: entry.colorId,
+                          variantId: entry.variantId,
+                          quantity: entry.value,
+                          store: store,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextButton.icon(
                         onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('العودة للتسوق'),
+                        icon: const Icon(Icons.arrow_forward, size: 18),
+                        label: const Text('العودة للتسوق'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.black54,
+                          alignment: AlignmentDirectional.centerStart,
+                        ),
                       ),
                     ],
-                  ),
-                ),
+                  );
+                  final summary = _CartSummary(
+                    store: store,
+                    onCheckout: () => openCheckout(context),
+                  );
+
+                  return SingleChildScrollView(
+                    padding: EdgeInsets.fromLTRB(
+                      StorefrontLayout.gutterFor(constraints.maxWidth),
+                      StorefrontSpacing.xl,
+                      StorefrontLayout.gutterFor(constraints.maxWidth),
+                      StorefrontSpacing.section +
+                          MediaQuery.paddingOf(context).bottom,
+                    ),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 1240),
+                        child: isWide
+                            ? Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(flex: 7, child: items),
+                                  const SizedBox(width: 32),
+                                  Expanded(flex: 4, child: summary),
+                                ],
+                              )
+                            : Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  items,
+                                  const SizedBox(height: 28),
+                                  summary,
+                                ],
+                              ),
+                      ),
+                    ),
+                  );
+                },
               );
-            }
-
-            return LayoutBuilder(
-              builder: (context, constraints) {
-                final isWide = constraints.maxWidth >= 900;
-                final items = Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    ...store.items.map(
-                      (entry) => _CartRow(
-                        product: entry.key,
-                        size: entry.size,
-                        colorName: entry.colorName,
-                        colorId: entry.colorId,
-                        variantId: entry.variantId,
-                        quantity: entry.value,
-                        store: store,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextButton.icon(
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.arrow_forward, size: 18),
-                      label: const Text('العودة للتسوق'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.black54,
-                        alignment: AlignmentDirectional.centerStart,
-                      ),
-                    ),
-                  ],
-                );
-                final summary = _CartSummary(
-                  store: store,
-                  onCheckout: () => openCheckout(context),
-                );
-
-                return SingleChildScrollView(
-                  padding: EdgeInsets.fromLTRB(
-                    constraints.maxWidth >= 1100 ? 48 : 16,
-                    28,
-                    constraints.maxWidth >= 1100 ? 48 : 16,
-                    48,
-                  ),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 1240),
-                      child: isWide
-                          ? Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(flex: 7, child: items),
-                                const SizedBox(width: 32),
-                                Expanded(flex: 4, child: summary),
-                              ],
-                            )
-                          : Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                items,
-                                const SizedBox(height: 28),
-                                summary,
-                              ],
-                            ),
-                    ),
-                  ),
-                );
-              },
-            );
-          },
+            },
+          ),
         ),
       ),
     );
@@ -171,8 +172,15 @@ class _CartSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(24),
-      color: Colors.white,
+      padding: EdgeInsets.all(
+        MediaQuery.sizeOf(context).width < StorefrontLayout.narrow ? 16 : 24,
+      ),
+      decoration: const BoxDecoration(
+        color: StorefrontColors.surface,
+        borderRadius: StorefrontRadius.surfaceBorder,
+        border: Border.fromBorderSide(BorderSide(color: StorefrontColors.line)),
+        boxShadow: StorefrontShadows.subtle,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -185,16 +193,24 @@ class _CartSummary extends StatelessWidget {
           const SizedBox(height: 16),
           _CartDiscountField(store: store),
           const SizedBox(height: 12),
-          const Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          const Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            spacing: StorefrontSpacing.md,
+            runSpacing: StorefrontSpacing.xs,
             children: [
               Text(
                 'الشحن',
-                style: TextStyle(color: Colors.black54, fontSize: 13),
+                style: TextStyle(
+                  color: StorefrontColors.mutedInk,
+                  fontSize: 13,
+                ),
               ),
               Text(
                 'يُحسب عند الدفع',
-                style: TextStyle(color: Colors.black54, fontSize: 13),
+                style: TextStyle(
+                  color: StorefrontColors.mutedInk,
+                  fontSize: 13,
+                ),
               ),
             ],
           ),
@@ -207,13 +223,6 @@ class _CartSummary extends StatelessWidget {
           SizedBox(
             height: 54,
             child: FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: inkColor,
-                foregroundColor: Colors.white,
-                shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.zero,
-                ),
-              ),
               onPressed: onCheckout,
               child: const Text(
                 'إتمام الطلب',
@@ -226,8 +235,8 @@ class _CartSummary extends StatelessWidget {
             'الدفع عند الاستلام · توصيل سريع',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: Colors.black45,
-              fontSize: 10,
+              color: StorefrontColors.mutedInk,
+              fontSize: 12,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -322,7 +331,23 @@ class _CartDiscountFieldState extends State<_CartDiscountField> {
               height: 56,
               child: FilledButton(
                 onPressed: applying ? null : apply,
-                child: Text(applied ? 'تم التطبيق' : 'تطبيق'),
+                child: AnimatedSwitcher(
+                  duration: StorefrontMotion.fast,
+                  child: applying
+                      ? const SizedBox(
+                          key: ValueKey('discount-loading'),
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(
+                          applied ? 'تم التطبيق' : 'تطبيق',
+                          key: const ValueKey('discount-label'),
+                        ),
+                ),
               ),
             ),
           ],
@@ -331,7 +356,10 @@ class _CartDiscountFieldState extends State<_CartDiscountField> {
           const SizedBox(height: 6),
           Text(
             'الكود المعتمد: ${widget.store.discountCode}',
-            style: const TextStyle(color: Colors.black54, fontSize: 11),
+            style: const TextStyle(
+              color: StorefrontColors.mutedInk,
+              fontSize: 12,
+            ),
           ),
         ],
       ],
@@ -360,16 +388,22 @@ class _CartRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 380;
+    final canIncrease = quantity < product.stockFor(size, colorId: colorId);
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(16),
-      color: Colors.white,
+      padding: EdgeInsets.all(compact ? 12 : 16),
+      decoration: const BoxDecoration(
+        color: StorefrontColors.surface,
+        borderRadius: StorefrontRadius.controlBorder,
+        border: Border.fromBorderSide(BorderSide(color: StorefrontColors.line)),
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 88,
-            height: 112,
+            width: compact ? 68 : 88,
+            height: compact ? 92 : 112,
             color: surfaceColor,
             child: SafeProductImage(
               url: product.imageUrl,
@@ -381,7 +415,7 @@ class _CartRow extends StatelessWidget {
               fallback: const Icon(Icons.image_outlined),
             ),
           ),
-          const SizedBox(width: 16),
+          SizedBox(width: compact ? 10 : 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -396,8 +430,8 @@ class _CartRow extends StatelessWidget {
                           Text(
                             '${product.gender} · ${product.category}',
                             style: const TextStyle(
-                              color: Colors.black54,
-                              fontSize: 10,
+                              color: StorefrontColors.mutedInk,
+                              fontSize: 12,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -413,7 +447,7 @@ class _CartRow extends StatelessWidget {
                           Text(
                             '${colorName == null ? '' : 'اللون: $colorName\n'}المقاس: $size',
                             style: const TextStyle(
-                              color: Colors.black54,
+                              color: StorefrontColors.mutedInk,
                               fontSize: 12,
                             ),
                           ),
@@ -421,7 +455,7 @@ class _CartRow extends StatelessWidget {
                       ),
                     ),
                     IconButton(
-                      tooltip: 'حذف المنتج',
+                      tooltip: 'إزالة وحدة من المنتج',
                       onPressed: () => store.remove(
                         product,
                         size: size,
@@ -433,8 +467,11 @@ class _CartRow extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 14),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: StorefrontSpacing.sm,
+                  runSpacing: StorefrontSpacing.xs,
                   children: [
                     Container(
                       decoration: const BoxDecoration(
@@ -462,11 +499,13 @@ class _CartRow extends StatelessWidget {
                           ),
                           IconButton(
                             tooltip: 'زيادة الكمية',
-                            onPressed: () => store.add(
-                              product,
-                              size: size,
-                              colorId: colorId,
-                            ),
+                            onPressed: canIncrease
+                                ? () => store.add(
+                                    product,
+                                    size: size,
+                                    colorId: colorId,
+                                  )
+                                : null,
                             icon: const Icon(Icons.add, size: 17),
                           ),
                         ],
@@ -503,26 +542,43 @@ class _TotalRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            color: large ? inkColor : Colors.black54,
-            fontSize: large ? 18 : 13,
-            fontWeight: large ? FontWeight.w900 : FontWeight.w600,
-          ),
-        ),
-        Text(
-          '${value.toStringAsFixed(2)} د.ل',
-          style: TextStyle(
-            color: inkColor,
-            fontSize: large ? 18 : 13,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-      ],
+    final labelWidget = Text(
+      label,
+      style: TextStyle(
+        color: large ? inkColor : StorefrontColors.mutedInk,
+        fontSize: large ? 18 : 13,
+        fontWeight: large ? FontWeight.w900 : FontWeight.w600,
+      ),
+    );
+    final valueWidget = Text(
+      '${value.toStringAsFixed(2)} د.ل',
+      textDirection: TextDirection.rtl,
+      style: TextStyle(
+        color: inkColor,
+        fontSize: large ? 18 : 13,
+        fontWeight: FontWeight.w900,
+      ),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 300) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              labelWidget,
+              const SizedBox(height: StorefrontSpacing.xxs),
+              Align(
+                alignment: AlignmentDirectional.centerEnd,
+                child: valueWidget,
+              ),
+            ],
+          );
+        }
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [labelWidget, valueWidget],
+        );
+      },
     );
   }
 }

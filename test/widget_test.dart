@@ -239,13 +239,47 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(const MyApp());
+    await tester.pumpAndSettle();
 
     expect(find.text('الكل'), findsNWidgets(2));
+    expect(find.text('توصيل إلى جميع أنحاء ليبيا'), findsOneWidget);
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -500));
+    await tester.pump();
     expect(find.text('تيشيرت الأداء الأساسي'), findsOneWidget);
-    expect(
-      find.text('توصيل إلى جميع أنحاء ليبيا  ·  DELIVERY ACROSS LIBYA'),
-      findsOneWidget,
+  });
+
+  testWidgets('catalog never presents an empty state while loading or failed', (
+    tester,
+  ) async {
+    final store = StoreState();
+    addTearDown(store.dispose);
+
+    Widget state({required bool loading, String? error}) => MaterialApp(
+      home: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          body: SingleChildScrollView(
+            child: CatalogResults(
+              isLoading: loading,
+              error: error,
+              products: const [],
+              store: store,
+              hasActiveFilter: false,
+              onRetry: () {},
+            ),
+          ),
+        ),
+      ),
     );
+
+    await tester.pumpWidget(state(loading: true));
+    expect(find.byKey(const ValueKey('catalog-loading-state')), findsOneWidget);
+    expect(find.text('لا توجد منتجات حاليًا'), findsNothing);
+
+    await tester.pumpWidget(state(loading: false, error: 'تعذر التحميل'));
+    expect(find.byKey(const ValueKey('catalog-error-state')), findsOneWidget);
+    expect(find.text('تعذّر تحميل المنتجات'), findsOneWidget);
+    expect(find.text('لا توجد منتجات حاليًا'), findsNothing);
   });
 
   testWidgets('adding a product updates the cart badge', (tester) async {
@@ -599,6 +633,23 @@ void main() {
     expect(find.text('إتمام الطلب'), findsWidgets);
     expect(find.text('١. معلومات التوصيل'), findsOneWidget);
     expect(find.text('تأكيد الطلب عبر واتساب'), findsOneWidget);
+  });
+
+  testWidgets('customer cart and checkout fit a narrow mobile viewport', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final store = StoreState()..add(products.first, size: 'M');
+    addTearDown(store.dispose);
+
+    await tester.pumpWidget(MaterialApp(home: CartPage(store: store)));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(MaterialApp(home: CheckoutPage(store: store)));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('mobile menu opens navigation options', (tester) async {
