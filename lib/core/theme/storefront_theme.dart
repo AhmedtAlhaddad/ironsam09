@@ -13,7 +13,9 @@ abstract final class StorefrontColors {
   static const mutedInk = Color(0xFF5E5A53);
   static const subtleInk = Color(0xFF716C64);
   static const error = Color(0xFF9F2F26);
+  static const errorSurface = Color(0xFFF9EDEB);
   static const success = Color(0xFF276749);
+  static const successSurface = Color(0xFFEAF4EE);
   static const focus = Color(0xFF87502F);
   static const onDark = Color(0xFFFFFFFF);
 }

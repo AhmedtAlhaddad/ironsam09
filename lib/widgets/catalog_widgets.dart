@@ -1,13 +1,51 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/storefront_theme.dart';
+import '../core/utils/image_url_policy.dart';
 import '../../data/models/product.dart';
 import '../../features/cart/cart_state.dart';
 import '../pages/catalog/product_details_page.dart';
 import 'safe_product_image.dart';
+
+class HeroImageSource {
+  const HeroImageSource({required this.url, required this.productName});
+
+  final String url;
+  final String productName;
+}
+
+List<HeroImageSource> buildHeroImageSources(Iterable<Product> products) {
+  final seenUrls = <String>{};
+  final sources = <HeroImageSource>[];
+
+  for (final product in products) {
+    final candidates = <String>[
+      product.imageUrl,
+      ...product.imageUrls,
+      ...product.images.map((image) => image.url),
+    ];
+    String? representativeUrl;
+    for (final candidate in candidates) {
+      final safeUrl = safeProductImageUrl(candidate);
+      if (safeUrl != null) {
+        representativeUrl = safeUrl;
+        break;
+      }
+    }
+    if (representativeUrl == null || !seenUrls.add(representativeUrl)) {
+      continue;
+    }
+    sources.add(
+      HeroImageSource(url: representativeUrl, productName: product.name),
+    );
+  }
+
+  return List.unmodifiable(sources);
+}
 
 class IronSamLogo extends StatelessWidget {
   const IronSamLogo({this.width = 96, this.height = 58, super.key});
@@ -343,13 +381,13 @@ class _HeaderLink extends StatelessWidget {
 class PageIntro extends StatelessWidget {
   const PageIntro({
     required this.title,
-    required this.featuredProduct,
+    required this.heroProducts,
     required this.onShopPressed,
     super.key,
   });
 
   final String title;
-  final Product? featuredProduct;
+  final List<Product> heroProducts;
   final VoidCallback onShopPressed;
 
   @override
@@ -365,9 +403,8 @@ class PageIntro extends StatelessWidget {
           mediaQuery.size.height - mediaQuery.padding.vertical,
         );
         final compactMobile = isPhone && usableViewportHeight < 700;
-        final product = featuredProduct;
-        final image = _HeroImage(
-          product: product,
+        final image = _RotatingHeroImage(
+          sources: buildHeroImageSources(heroProducts),
           cacheWidth:
               (constraints.maxWidth * MediaQuery.devicePixelRatioOf(context))
                   .round(),
@@ -434,33 +471,138 @@ class PageIntro extends StatelessWidget {
   }
 }
 
-class _HeroImage extends StatelessWidget {
-  const _HeroImage({required this.product, required this.cacheWidth});
+class _RotatingHeroImage extends StatefulWidget {
+  const _RotatingHeroImage({required this.sources, required this.cacheWidth});
 
-  final Product? product;
+  static const rotationInterval = Duration(milliseconds: 2500);
+  static const transitionDuration = Duration(milliseconds: 380);
+
+  final List<HeroImageSource> sources;
   final int cacheWidth;
 
   @override
+  State<_RotatingHeroImage> createState() => _RotatingHeroImageState();
+}
+
+class _RotatingHeroImageState extends State<_RotatingHeroImage> {
+  Timer? _rotationTimer;
+  int _activeIndex = 0;
+  bool? _reducedMotion;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reducedMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (_reducedMotion == reducedMotion) return;
+    _reducedMotion = reducedMotion;
+    if (reducedMotion) {
+      _rotationTimer?.cancel();
+      _rotationTimer = null;
+      _activeIndex = 0;
+    } else {
+      _restartTimer();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _RotatingHeroImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_sameSources(oldWidget.sources, widget.sources)) return;
+
+    final previousUrl = oldWidget.sources.isEmpty
+        ? null
+        : oldWidget
+              .sources[_activeIndex.clamp(0, oldWidget.sources.length - 1)]
+              .url;
+    final retainedIndex = previousUrl == null
+        ? -1
+        : widget.sources.indexWhere((source) => source.url == previousUrl);
+    _activeIndex = retainedIndex >= 0 ? retainedIndex : 0;
+    _restartTimer();
+  }
+
+  bool _sameSources(
+    List<HeroImageSource> previous,
+    List<HeroImageSource> current,
+  ) {
+    if (identical(previous, current)) return true;
+    if (previous.length != current.length) return false;
+    for (var index = 0; index < previous.length; index++) {
+      if (previous[index].url != current[index].url) return false;
+    }
+    return true;
+  }
+
+  void _restartTimer() {
+    _rotationTimer?.cancel();
+    _rotationTimer = null;
+    if (_reducedMotion != false || widget.sources.length < 2) return;
+
+    _rotationTimer = Timer.periodic(_RotatingHeroImage.rotationInterval, (_) {
+      if (!mounted || widget.sources.length < 2) return;
+      setState(() {
+        _activeIndex = (_activeIndex + 1) % widget.sources.length;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _rotationTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final product = this.product;
+    final source = widget.sources.isEmpty
+        ? null
+        : widget.sources[_activeIndex.clamp(0, widget.sources.length - 1)];
+    final reducedMotion = _reducedMotion ?? false;
     return Stack(
       fit: StackFit.expand,
       children: [
-        SafeProductImage(
-          url: product?.imageUrl,
-          fit: BoxFit.cover,
-          cacheWidth: cacheWidth,
-          filterQuality: FilterQuality.medium,
-          semanticLabel: product == null
-              ? 'صورة تشكيلة آيرون سام'
-              : 'صورة ${product.name}',
-          fallback: ColoredBox(
-            color: StorefrontColors.surfaceMuted,
-            child: Center(
-              child: ExcludeSemantics(
-                child: Opacity(
-                  opacity: .2,
-                  child: IronSamLogo(width: 180, height: 110),
+        Semantics(
+          image: true,
+          label: 'صور منتجات من تشكيلة آيرون سام',
+          child: ExcludeSemantics(
+            child: AnimatedSwitcher(
+              duration: reducedMotion
+                  ? Duration.zero
+                  : _RotatingHeroImage.transitionDuration,
+              switchInCurve: StorefrontMotion.curve,
+              switchOutCurve: Curves.easeInCubic,
+              layoutBuilder: (currentChild, previousChildren) => Stack(
+                fit: StackFit.expand,
+                children: [...previousChildren, ?currentChild],
+              ),
+              transitionBuilder: (child, animation) {
+                if (reducedMotion) return child;
+                final scale = Tween<double>(begin: .985, end: 1).animate(
+                  CurvedAnimation(
+                    parent: animation,
+                    curve: StorefrontMotion.curve,
+                  ),
+                );
+                return FadeTransition(
+                  opacity: animation,
+                  child: ScaleTransition(scale: scale, child: child),
+                );
+              },
+              child: SafeProductImage(
+                key: ValueKey(source?.url ?? 'hero-image-fallback'),
+                url: source?.url,
+                fit: BoxFit.cover,
+                cacheWidth: widget.cacheWidth,
+                filterQuality: FilterQuality.medium,
+                fallback: ColoredBox(
+                  color: StorefrontColors.surfaceMuted,
+                  child: Center(
+                    child: Opacity(
+                      opacity: .2,
+                      child: IronSamLogo(width: 180, height: 110),
+                    ),
+                  ),
                 ),
               ),
             ),

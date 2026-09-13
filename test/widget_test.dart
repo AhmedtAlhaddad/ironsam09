@@ -458,6 +458,138 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  test('Hero image sources are safe, representative, and deduplicated', () {
+    const primaryUrl = 'https://images.example.com/primary.jpg';
+    const secondaryUrl = 'https://images.example.com/secondary.jpg';
+    const products = [
+      Product(
+        name: 'الأول',
+        category: 'اختبار',
+        gender: 'للجنسين',
+        price: 100,
+        sizes: 'M',
+        status: 'متوفر',
+        imageUrl: primaryUrl,
+        imageUrls: [secondaryUrl],
+      ),
+      Product(
+        name: 'مكرر',
+        category: 'اختبار',
+        gender: 'للجنسين',
+        price: 100,
+        sizes: 'M',
+        status: 'متوفر',
+        imageUrl: '  https://images.example.com/primary.jpg  ',
+      ),
+      Product(
+        name: 'بديل',
+        category: 'اختبار',
+        gender: 'للجنسين',
+        price: 100,
+        sizes: 'M',
+        status: 'متوفر',
+        imageUrl: '',
+        imageUrls: ['http://unsafe.example.com/image.jpg', secondaryUrl],
+      ),
+      Product(
+        name: 'بلا صورة',
+        category: 'اختبار',
+        gender: 'للجنسين',
+        price: 100,
+        sizes: 'M',
+        status: 'متوفر',
+        imageUrl: 'javascript:alert(1)',
+      ),
+    ];
+
+    final sources = buildHeroImageSources(products);
+
+    expect(sources.map((source) => source.url), [primaryUrl, secondaryUrl]);
+    expect(sources.map((source) => source.productName), ['الأول', 'بديل']);
+    expect(buildHeroImageSources([products.last]), isEmpty);
+  });
+
+  testWidgets('Hero image rotation handles zero, one, and multiple images', (
+    tester,
+  ) async {
+    const firstUrl = 'https://images.example.com/hero-one.jpg';
+    const secondUrl = 'https://images.example.com/hero-two.jpg';
+    const first = Product(
+      name: 'الأول',
+      category: 'اختبار',
+      gender: 'للجنسين',
+      price: 100,
+      sizes: 'M',
+      status: 'متوفر',
+      imageUrl: firstUrl,
+    );
+    const second = Product(
+      name: 'الثاني',
+      category: 'اختبار',
+      gender: 'للجنسين',
+      price: 100,
+      sizes: 'M',
+      status: 'متوفر',
+      imageUrl: secondUrl,
+    );
+
+    Widget hero(List<Product> products, {bool reducedMotion = false}) {
+      return MaterialApp(
+        home: MediaQuery(
+          data: MediaQueryData(
+            size: const Size(390, 844),
+            disableAnimations: reducedMotion,
+          ),
+          child: Directionality(
+            textDirection: TextDirection.rtl,
+            child: Scaffold(
+              body: SingleChildScrollView(
+                child: SizedBox(
+                  width: 390,
+                  child: PageIntro(
+                    title: 'الكل',
+                    heroProducts: products,
+                    onShopPressed: () {},
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(hero(const []));
+    expect(find.byKey(const ValueKey('hero-image-fallback')), findsOneWidget);
+
+    await tester.pumpWidget(hero(const [first]));
+    await tester.pump(const Duration(seconds: 3));
+    expect(find.byKey(const ValueKey(firstUrl)), findsOneWidget);
+    expect(find.byKey(const ValueKey(secondUrl)), findsNothing);
+
+    await tester.pumpWidget(hero(const [first, second]));
+    await tester.pump(const Duration(milliseconds: 2000));
+    await tester.pumpWidget(hero(const [first, second]));
+    await tester.pump(const Duration(milliseconds: 499));
+    expect(find.byKey(const ValueKey(firstUrl)), findsOneWidget);
+    expect(find.byKey(const ValueKey(secondUrl)), findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 1));
+    expect(find.byKey(const ValueKey(secondUrl)), findsOneWidget);
+    expect(find.byKey(const ValueKey(firstUrl)), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byKey(const ValueKey(firstUrl)), findsNothing);
+
+    await tester.pumpWidget(hero(const [first, second], reducedMotion: true));
+    await tester.pump(const Duration(seconds: 3));
+    expect(find.byKey(const ValueKey(firstUrl)), findsOneWidget);
+    expect(find.byKey(const ValueKey(secondUrl)), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(seconds: 3));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('mobile hero CTA is visible above the fold on supported phones', (
     tester,
   ) async {
@@ -924,6 +1056,98 @@ void main() {
 
     await tester.pumpWidget(MaterialApp(home: CheckoutPage(store: store)));
     await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Phase D cart and checkout adapt across storefront breakpoints', (
+    tester,
+  ) async {
+    const viewports = <Size>[
+      Size(320, 700),
+      Size(390, 844),
+      Size(768, 900),
+      Size(1024, 800),
+      Size(1440, 900),
+    ];
+    final store = StoreState()..add(products.first, size: 'M');
+    addTearDown(() {
+      tester.binding.setSurfaceSize(null);
+      store.dispose();
+    });
+
+    for (final viewport in viewports) {
+      await tester.binding.setSurfaceSize(viewport);
+      await tester.pumpWidget(MaterialApp(home: CartPage(store: store)));
+      await tester.pumpAndSettle();
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: 'Cart overflow at $viewport',
+      );
+
+      await tester.pumpWidget(MaterialApp(home: CheckoutPage(store: store)));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('checkout-confirm-cta')),
+        findsOneWidget,
+        reason: 'Checkout must expose one primary CTA at $viewport',
+      );
+      expect(
+        find.byKey(const ValueKey('mobile-checkout-bar')),
+        viewport.width < 768 ? findsOneWidget : findsNothing,
+      );
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: 'Checkout overflow at $viewport',
+      );
+    }
+  });
+
+  testWidgets('mobile checkout CTA respects safe area and keyboard', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 700));
+    tester.view.padding = const FakeViewPadding(bottom: 16);
+    final store = StoreState()..add(products.first, size: 'M');
+    addTearDown(() {
+      tester.binding.setSurfaceSize(null);
+      tester.view.resetPadding();
+      tester.view.resetViewInsets();
+      store.dispose();
+    });
+
+    await tester.pumpWidget(MaterialApp(home: CheckoutPage(store: store)));
+    await tester.pumpAndSettle();
+
+    final bar = find.byKey(const ValueKey('mobile-checkout-bar'));
+    expect(bar, findsOneWidget);
+    expect(
+      tester.getRect(bar).bottom,
+      lessThanOrEqualTo(700),
+      reason: 'Sticky CTA must remain inside the safe viewport',
+    );
+    expect(tester.takeException(), isNull);
+
+    tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+    await tester.pumpAndSettle();
+    expect(bar, findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('discount empty state is inline and accessible', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(320, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final store = StoreState()..add(products.first, size: 'M');
+    addTearDown(store.dispose);
+
+    await tester.pumpWidget(MaterialApp(home: CartPage(store: store)));
+    final applyButton = find.byKey(const ValueKey('cart-discount-apply'));
+    await tester.ensureVisible(applyButton);
+    await tester.tap(applyButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('أدخل كود الخصم أولًا.'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 

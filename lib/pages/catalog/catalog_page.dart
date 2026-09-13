@@ -94,17 +94,6 @@ class _CatalogPageState extends State<CatalogPage> {
 
   List<Product> get visibleProducts => _visibleProducts;
 
-  Product? get featuredProduct {
-    for (final product in widget.store.products) {
-      if (widget.genderFilter == null ||
-          product.gender == widget.genderFilter ||
-          product.gender == 'للجنسين') {
-        return product;
-      }
-    }
-    return null;
-  }
-
   List<Product> _filterProducts() {
     final normalizedQuery = query.trim().toLowerCase();
     return widget.store.products.where((product) {
@@ -207,7 +196,7 @@ class _CatalogPageState extends State<CatalogPage> {
                           children: [
                             PageIntro(
                               title: widget.title,
-                              featuredProduct: featuredProduct,
+                              heroProducts: visibleProducts,
                               onShopPressed: _scrollToCatalog,
                             ),
                             const SizedBox(height: StorefrontSpacing.xxl),
