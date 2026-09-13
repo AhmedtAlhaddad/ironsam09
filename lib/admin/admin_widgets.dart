@@ -146,11 +146,13 @@ class AdminSectionCard extends StatelessWidget {
     required this.title,
     required this.child,
     this.subtitle,
+    this.action,
     this.framed = true,
     super.key,
   });
   final String title;
   final String? subtitle;
+  final Widget? action;
   final Widget child;
   final bool framed;
 
@@ -167,9 +169,20 @@ class AdminSectionCard extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          title,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            if (action != null) ...[const SizedBox(width: 12), action!],
+          ],
         ),
         if (subtitle != null) ...[
           const SizedBox(height: 4),
@@ -192,10 +205,12 @@ class AdminStatusBadge extends StatelessWidget {
   const AdminStatusBadge({
     required this.label,
     this.tone = AdminStatusTone.neutral,
+    this.icon,
     super.key,
   });
   final String label;
   final AdminStatusTone tone;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -211,18 +226,31 @@ class AdminStatusBadge extends StatelessWidget {
       AdminStatusTone.danger => AdminColors.dangerSoft,
       AdminStatusTone.neutral => AdminColors.background,
     };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
-        color: background,
-        border: Border.all(color: color.withValues(alpha: .25)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 11,
-          fontWeight: FontWeight.w800,
+    return Semantics(
+      label: 'الحالة: $label',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: background,
+          border: Border.all(color: color.withValues(alpha: .25)),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              ExcludeSemantics(child: Icon(icon, size: 14, color: color)),
+              const SizedBox(width: 5),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -175,6 +175,9 @@ class _FakeAdminService implements AdminDiscountCodesService {
   int listCalls = 0;
 
   @override
+  Future<List<PayableCommissionGroup>> payableCommissions() async => const [];
+
+  @override
   Future<List<Map<String, dynamic>>> discounts() async {
     events.add('list');
     listCalls++;

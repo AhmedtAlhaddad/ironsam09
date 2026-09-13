@@ -8,6 +8,8 @@ class DuplicateDiscountCodeException implements Exception {
 abstract interface class AdminDiscountCodesService {
   Future<List<Map<String, dynamic>>> discounts();
 
+  Future<List<PayableCommissionGroup>> payableCommissions();
+
   Future<DiscountPerformance> discountPerformance(String code);
 
   Future<Map<String, dynamic>> markInfluencerCommissionsPaid(
@@ -29,6 +31,26 @@ abstract interface class AdminDiscountCodesService {
   Future<void> deleteDiscount(String discountId);
 }
 
+abstract interface class AdminOperationsService {
+  Future<Map<String, dynamic>> dashboard();
+
+  Future<List<Map<String, dynamic>>> orders();
+
+  Future<void> updateOrderStatus(String orderId, String status);
+
+  Future<void> updateCommissionStatus(String orderId, String status);
+}
+
+const adminActiveOrderStatuses = {'pending', 'confirmed', 'preparing'};
+
+bool isAdminActiveOrder(Map<String, dynamic> order) =>
+    adminActiveOrderStatuses.contains(order['status']);
+
+List<Map<String, dynamic>> dashboardActiveOrdersFromRows(
+  Iterable<Map<String, dynamic>> orders, {
+  int limit = 12,
+}) => orders.where(isAdminActiveOrder).take(limit).toList(growable: false);
+
 class CommissionTotals {
   const CommissionTotals({
     required this.pending,
@@ -41,6 +63,114 @@ class CommissionTotals {
   final double paid;
 
   double get total => pending + approved + paid;
+}
+
+bool isAdminPayableCommissionRow(Map<String, dynamic> row) {
+  // Mirrors admin_mark_influencer_commissions_paid without changing its
+  // backend semantics. Both Dashboard and Sports Codes reuse this predicate.
+  final influencerId = row['influencer_id'] as String?;
+  return row['commission_status'] == 'approved' &&
+      row['status'] == 'delivered' &&
+      influencerId != null &&
+      influencerId.isNotEmpty;
+}
+
+double payableCommissionTotalFromRows(Iterable<Map<String, dynamic>> rows) =>
+    rows
+        .where(isAdminPayableCommissionRow)
+        .fold<double>(
+          0,
+          (sum, row) =>
+              sum +
+              ((row['athlete_commission_amount_lyd'] as num?)?.toDouble() ?? 0),
+        );
+
+CommissionTotals adminCommissionTotalsFromRows(
+  Iterable<Map<String, dynamic>> rows,
+) {
+  final materialized = rows.toList(growable: false);
+  final totals = commissionTotalsFromRows(materialized);
+  return CommissionTotals(
+    pending: totals.pending,
+    approved: payableCommissionTotalFromRows(materialized),
+    paid: totals.paid,
+  );
+}
+
+class PayableCommissionOrder {
+  const PayableCommissionOrder({
+    required this.id,
+    required this.orderNumber,
+    required this.amount,
+    this.discountCode,
+  });
+
+  final String id;
+  final String orderNumber;
+  final String? discountCode;
+  final double amount;
+}
+
+class PayableCommissionGroup {
+  const PayableCommissionGroup({
+    required this.influencerId,
+    required this.influencerName,
+    required this.orders,
+  });
+
+  final String influencerId;
+  final String influencerName;
+  final List<PayableCommissionOrder> orders;
+
+  double get amount => orders.fold(0, (sum, order) => sum + order.amount);
+
+  List<String> get codes =>
+      (orders.map((order) => order.discountCode).whereType<String>().toSet()
+            ..removeWhere((code) => code.trim().isEmpty))
+          .toList()
+        ..sort();
+}
+
+List<PayableCommissionGroup> payableCommissionGroupsFromRows(
+  Iterable<Map<String, dynamic>> rows,
+) {
+  final grouped = <String, List<PayableCommissionOrder>>{};
+  final names = <String, String>{};
+  for (final row in rows.where(isAdminPayableCommissionRow)) {
+    final influencerId = row['influencer_id'] as String;
+    final influencer = row['influencers'];
+    final influencerName = influencer is Map
+        ? '${influencer['name'] ?? ''}'.trim()
+        : '';
+    names.putIfAbsent(
+      influencerId,
+      () => influencerName.isEmpty ? 'رياضي غير مسمى' : influencerName,
+    );
+    grouped
+        .putIfAbsent(influencerId, () => [])
+        .add(
+          PayableCommissionOrder(
+            id: '${row['id'] ?? ''}',
+            orderNumber: '${row['order_number'] ?? ''}',
+            discountCode: (row['discount_code'] as String?)?.trim(),
+            amount:
+                (row['athlete_commission_amount_lyd'] as num?)?.toDouble() ?? 0,
+          ),
+        );
+  }
+
+  final result = grouped.entries
+      .map(
+        (entry) => PayableCommissionGroup(
+          influencerId: entry.key,
+          influencerName: names[entry.key] ?? 'رياضي غير مسمى',
+          orders: List.unmodifiable(entry.value),
+        ),
+      )
+      .where((group) => group.amount > 0)
+      .toList();
+  result.sort((a, b) => b.amount.compareTo(a.amount));
+  return result;
 }
 
 class DiscountPerformance {
@@ -61,6 +191,17 @@ class DiscountPerformance {
   final double sales;
   final CommissionTotals commission;
   final String? influencerId;
+
+  DiscountPerformance withApprovedMarkedPaid() => DiscountPerformance(
+    uses: uses,
+    sales: sales,
+    commission: CommissionTotals(
+      pending: commission.pending,
+      approved: 0,
+      paid: commission.paid + commission.approved,
+    ),
+    influencerId: influencerId,
+  );
 }
 
 CommissionTotals commissionTotalsFromRows(Iterable<Map<String, dynamic>> rows) {
@@ -99,7 +240,7 @@ DiscountPerformance discountPerformanceFromRows(
       0,
       (sum, row) => sum + ((row['total_lyd'] as num?)?.toDouble() ?? 0),
     ),
-    commission: commissionTotalsFromRows(matchingRows),
+    commission: adminCommissionTotalsFromRows(matchingRows),
     influencerId: matchingRows
         .map((row) => row['influencer_id'] as String?)
         .whereType<String>()
@@ -107,7 +248,8 @@ DiscountPerformance discountPerformanceFromRows(
   );
 }
 
-class AdminService implements AdminDiscountCodesService {
+class AdminService
+    implements AdminDiscountCodesService, AdminOperationsService {
   AdminService(this.client);
 
   final SupabaseClient client;
@@ -123,18 +265,22 @@ class AdminService implements AdminDiscountCodesService {
     return row?['is_admin'] == true;
   }
 
+  @override
   Future<Map<String, dynamic>> dashboard() async {
     final orders = await client
         .from('orders')
         .select(
-          'id, status, subtotal_lyd, total_lyd, discount_code, influencer_id, athlete_commission_amount_lyd, commission_status, created_at, influencers(name)',
-        );
+          'id, order_number, customer_name, phone, city, status, subtotal_lyd, total_lyd, discount_code, influencer_id, athlete_commission_amount_lyd, commission_status, created_at, influencers(name)',
+        )
+        .order('created_at', ascending: false);
     final variants = await client
         .from('product_variants')
         .select('stock_quantity, products(name_ar)');
     final today = DateTime.now();
     final todayOrders = orders.where((row) {
-      final date = DateTime.tryParse(row['created_at'] as String? ?? '');
+      final date = DateTime.tryParse(
+        row['created_at'] as String? ?? '',
+      )?.toLocal();
       return date != null &&
           date.year == today.year &&
           date.month == today.month &&
@@ -162,19 +308,17 @@ class AdminService implements AdminDiscountCodesService {
       if (influencerId != null) {
         athleteNames.putIfAbsent(
           influencerId,
-          () =>
-              (order['influencers'] as Map?)?['name'] as String? ??
-              'Ø±ÙŠØ§Ø¶ÙŠ',
+          () => (order['influencers'] as Map?)?['name'] as String? ?? 'رياضي',
         );
         athleteOrders.putIfAbsent(influencerId, () => []).add(order);
       }
     }
     final athleteStats = <String, Map<String, dynamic>>{};
     for (final entry in athleteOrders.entries) {
-      final totals = commissionTotalsFromRows(entry.value);
+      final totals = adminCommissionTotalsFromRows(entry.value);
       athleteStats[entry.key] = {
         'id': entry.key,
-        'name': athleteNames[entry.key] ?? 'Ø±ÙŠØ§Ø¶ÙŠ',
+        'name': athleteNames[entry.key] ?? 'رياضي',
         'uses': entry.value.length,
         'revenue': entry.value.fold<double>(
           0,
@@ -186,7 +330,8 @@ class AdminService implements AdminDiscountCodesService {
         'paid': totals.paid,
       };
     }
-    final commissionTotals = commissionTotalsFromRows(orders);
+    final commissionTotals = adminCommissionTotalsFromRows(orders);
+    final activeOrders = orders.where(isAdminActiveOrder).toList();
     final topCode = codes.entries.isEmpty
         ? null
         : (codes.entries.toList()..sort((a, b) => b.value.compareTo(a.value)))
@@ -194,6 +339,8 @@ class AdminService implements AdminDiscountCodesService {
               .key;
     return {
       'orders_today': todayOrders.length,
+      'active_orders_count': activeOrders.length,
+      'active_orders': dashboardActiveOrdersFromRows(activeOrders),
       'pending': orders.where((row) => row['status'] == 'pending').length,
       'confirmed': confirmed.length,
       'sales': confirmed.fold<double>(
@@ -251,6 +398,7 @@ class AdminService implements AdminDiscountCodesService {
         .order('stock_quantity'),
   );
 
+  @override
   Future<List<Map<String, dynamic>>> orders() async => _maps(
     await client
         .from('orders')
@@ -265,12 +413,26 @@ class AdminService implements AdminDiscountCodesService {
       _maps(await client.rpc('admin_list_discount_codes'));
 
   @override
+  Future<List<PayableCommissionGroup>> payableCommissions() async {
+    final rows = _maps(
+      await client
+          .from('orders')
+          .select(
+            'id, order_number, status, discount_code, influencer_id, athlete_commission_amount_lyd, commission_status, influencers(name)',
+          )
+          .eq('commission_status', 'approved')
+          .order('created_at', ascending: false),
+    );
+    return payableCommissionGroupsFromRows(rows);
+  }
+
+  @override
   Future<DiscountPerformance> discountPerformance(String code) async {
     final rows = _maps(
       await client
           .from('orders')
           .select(
-            'discount_code, influencer_id, total_lyd, athlete_commission_amount_lyd, commission_status',
+            'discount_code, influencer_id, status, total_lyd, athlete_commission_amount_lyd, commission_status',
           )
           .eq('discount_code', code.trim().toUpperCase()),
     );
@@ -479,6 +641,7 @@ class AdminService implements AdminDiscountCodesService {
   Future<void> deleteProduct(String productId) =>
       client.from('products').delete().eq('id', productId);
 
+  @override
   Future<void> updateOrderStatus(String orderId, String status) async {
     await client.rpc(
       'set_order_status',
@@ -549,6 +712,7 @@ class AdminService implements AdminDiscountCodesService {
       .eq('id', discountId)
       .setHeader('Prefer', 'return=minimal');
 
+  @override
   Future<void> updateCommissionStatus(String orderId, String status) async {
     await client.rpc(
       'set_commission_status',

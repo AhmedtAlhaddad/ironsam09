@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/theme/storefront_theme.dart';
 import '../../data/models/product.dart';
 import '../../features/cart/cart_state.dart';
 import '../../widgets/catalog_widgets.dart';
@@ -43,6 +44,7 @@ class CatalogPage extends StatefulWidget {
 class _CatalogPageState extends State<CatalogPage> {
   Timer? _searchDebounce;
   final FocusNode _searchFocusNode = FocusNode();
+  final GlobalKey _catalogSectionKey = GlobalKey();
   List<String> _liveCategories = const [];
   List<Product> _visibleProducts = const [];
 
@@ -132,6 +134,17 @@ class _CatalogPageState extends State<CatalogPage> {
     _searchFocusNode.requestFocus();
   }
 
+  void _scrollToCatalog() {
+    final sectionContext = _catalogSectionKey.currentContext;
+    if (sectionContext == null) return;
+    Scrollable.ensureVisible(
+      sectionContext,
+      duration: StorefrontMotion.resolve(context, StorefrontMotion.deliberate),
+      curve: StorefrontMotion.curve,
+      alignment: 0,
+    );
+  }
+
   void openCart() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => CartPage(store: widget.store)),
@@ -146,87 +159,133 @@ class _CatalogPageState extends State<CatalogPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        body: Column(
-          children: [
-            const DeliveryBanner(),
-            StoreHeader(
-              store: widget.store,
-              activeSection: widget.title,
-              onMenPressed: () => openPage(MenPage(store: widget.store)),
-              onWomenPressed: () => openPage(WomenPage(store: widget.store)),
-              onAllPressed: () =>
-                  openPage(CollectionsPage(store: widget.store)),
-              onCartPressed: openCart,
-            ),
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final isDesktop = constraints.maxWidth >= 1024;
-                  final horizontalPadding = isDesktop ? 32.0 : 16.0;
-                  final content = ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1440),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        PageIntro(title: widget.title),
-                        const SizedBox(height: 28),
-                        FilterBar(
-                          categories: liveCategories,
-                          selectedCategory: selectedCategory,
-                          onCategoryChanged: _onCategoryChanged,
-                          query: query,
-                          onQueryChanged: _onQueryChanged,
-                          searchFocusNode: _searchFocusNode,
+    return StorefrontTheme(
+      child: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          body: SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                const DeliveryBanner(),
+                StoreHeader(
+                  store: widget.store,
+                  activeSection: widget.title,
+                  onMenPressed: () => openPage(MenPage(store: widget.store)),
+                  onWomenPressed: () =>
+                      openPage(WomenPage(store: widget.store)),
+                  onAllPressed: () =>
+                      openPage(CollectionsPage(store: widget.store)),
+                  onCartPressed: openCart,
+                ),
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final horizontalPadding = StorefrontLayout.gutterFor(
+                        constraints.maxWidth,
+                      );
+                      final shortMobileViewport =
+                          constraints.maxWidth < 600 &&
+                          constraints.maxHeight < 520;
+                      final content = ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxWidth: StorefrontLayout.contentMaxWidth,
                         ),
-                      ],
-                    ),
-                  );
-                  return Padding(
-                    padding: EdgeInsets.only(top: 28, bottom: 54),
-                    child: CustomScrollView(
-                      slivers: [
-                        SliverToBoxAdapter(
-                          child: Center(
-                            child: Padding(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: horizontalPadding,
-                              ),
-                              child: content,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            PageIntro(
+                              title: widget.title,
+                              heroProducts: visibleProducts,
+                              onShopPressed: _scrollToCatalog,
                             ),
-                          ),
+                            const SizedBox(height: StorefrontSpacing.xxl),
+                            CatalogSectionHeading(
+                              key: _catalogSectionKey,
+                              title: widget.title,
+                            ),
+                            const SizedBox(height: StorefrontSpacing.lg),
+                            FilterBar(
+                              categories: liveCategories,
+                              selectedCategory: selectedCategory,
+                              onCategoryChanged: _onCategoryChanged,
+                              query: query,
+                              onQueryChanged: _onQueryChanged,
+                              searchFocusNode: _searchFocusNode,
+                            ),
+                          ],
                         ),
-                        const SliverToBoxAdapter(child: SizedBox(height: 32)),
-                        SliverToBoxAdapter(
-                          child: Center(
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 1440),
-                              child: Padding(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: horizontalPadding,
-                                ),
-                                child: ProductGrid(
-                                  products: visibleProducts,
-                                  store: widget.store,
-                                  onSearchPressed: _focusSearch,
+                      );
+                      return Padding(
+                        padding: EdgeInsets.only(
+                          top: shortMobileViewport
+                              ? StorefrontSpacing.xs
+                              : StorefrontSpacing.xl,
+                          bottom: StorefrontSpacing.section,
+                        ),
+                        child: CustomScrollView(
+                          slivers: [
+                            SliverToBoxAdapter(
+                              child: Center(
+                                child: Padding(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: horizontalPadding,
+                                  ),
+                                  child: content,
                                 ),
                               ),
                             ),
-                          ),
+                            const SliverToBoxAdapter(
+                              child: SizedBox(height: StorefrontSpacing.lg),
+                            ),
+                            SliverToBoxAdapter(
+                              child: Center(
+                                child: ConstrainedBox(
+                                  constraints: const BoxConstraints(
+                                    maxWidth: StorefrontLayout.contentMaxWidth,
+                                  ),
+                                  child: Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: horizontalPadding,
+                                    ),
+                                    child: AnimatedBuilder(
+                                      animation: widget.store,
+                                      builder: (context, _) => CatalogResults(
+                                        isLoading: widget.store.isLoading,
+                                        error: widget.store.loadError,
+                                        products: visibleProducts,
+                                        store: widget.store,
+                                        hasActiveFilter:
+                                            query.trim().isNotEmpty ||
+                                            selectedCategory !=
+                                                CatalogPage.allCategory,
+                                        onRetry: widget.store.loadCatalog,
+                                        onSearchPressed: _focusSearch,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SliverToBoxAdapter(
+                              child: SizedBox(height: 20),
+                            ),
+                            const SliverToBoxAdapter(child: TrustStrip()),
+                            const SliverToBoxAdapter(
+                              child: SizedBox(
+                                height: StorefrontSpacing.section,
+                              ),
+                            ),
+                            const SliverToBoxAdapter(child: StoreFooter()),
+                          ],
                         ),
-                        const SliverToBoxAdapter(child: SizedBox(height: 20)),
-                        const SliverToBoxAdapter(child: TrustStrip()),
-                        const SliverToBoxAdapter(child: SizedBox(height: 54)),
-                        const SliverToBoxAdapter(child: StoreFooter()),
-                      ],
-                    ),
-                  );
-                },
-              ),
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
