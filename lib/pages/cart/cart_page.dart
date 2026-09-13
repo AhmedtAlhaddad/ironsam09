@@ -472,31 +472,40 @@ class _CartDiscountFieldState extends State<_CartDiscountField> {
               },
               onSubmitted: (_) => apply(),
             );
-            final button = SizedBox(
-              height: 56,
-              width: stacked ? double.infinity : null,
-              child: FilledButton(
-                key: const ValueKey('cart-discount-apply'),
-                onPressed: applying ? null : apply,
-                child: AnimatedSwitcher(
-                  duration: StorefrontMotion.resolve(
-                    context,
-                    StorefrontMotion.fast,
-                  ),
-                  child: applying
-                      ? const SizedBox(
-                          key: ValueKey('discount-loading'),
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
+            final button = Semantics(
+              button: true,
+              enabled: !applying,
+              label: applying
+                  ? 'جاري التحقق من كود الخصم'
+                  : applied
+                  ? 'تم تطبيق كود الخصم'
+                  : 'تطبيق كود الخصم',
+              child: SizedBox(
+                height: 56,
+                width: stacked ? double.infinity : null,
+                child: FilledButton(
+                  key: const ValueKey('cart-discount-apply'),
+                  onPressed: applying ? null : apply,
+                  child: AnimatedSwitcher(
+                    duration: StorefrontMotion.resolve(
+                      context,
+                      StorefrontMotion.fast,
+                    ),
+                    child: applying
+                        ? const SizedBox(
+                            key: ValueKey('discount-loading'),
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Text(
+                            applied ? 'تم التطبيق' : 'تطبيق',
+                            key: ValueKey(applied),
                           ),
-                        )
-                      : Text(
-                          applied ? 'تم التطبيق' : 'تطبيق',
-                          key: ValueKey(applied),
-                        ),
+                  ),
                 ),
               ),
             );

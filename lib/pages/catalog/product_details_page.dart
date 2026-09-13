@@ -485,7 +485,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
         if (images.length > 1) ...[
           const SizedBox(height: StorefrontSpacing.sm),
           SizedBox(
-            height: 44,
+            height: 48,
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
@@ -588,18 +588,18 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
     required String? selectedSize,
   }) {
     if (colors.length > 1 && selectedColor == null) {
-      _showMessage('يرجى اختيار اللون أولاً');
+      _showMessage('يرجى اختيار اللون أولًا');
       return;
     }
     if (sizes.length > 1 && selectedSize == null) {
-      _showMessage('يرجى اختيار المقاس أولاً');
+      _showMessage('يرجى اختيار المقاس أولًا');
       return;
     }
 
     final before = store.itemCount;
     store.add(product, size: selectedSize, colorId: selectedColor);
     if (store.itemCount == before) {
-      _showMessage('هذا الخيار غير متوفر حالياً');
+      _showMessage('هذا الخيار غير متوفر حاليًا');
       return;
     }
 
@@ -980,7 +980,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                             : stockLimitReached
                             ? 'اكتملت الكمية المتاحة'
                             : selectedOptionUnavailable
-                            ? 'غير متوفر حالياً'
+                            ? 'غير متوفر حاليًا'
                             : 'إضافة إلى السلة',
                         textAlign: TextAlign.center,
                       ),

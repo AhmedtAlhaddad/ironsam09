@@ -403,10 +403,13 @@ class PageIntro extends StatelessWidget {
           mediaQuery.size.height - mediaQuery.padding.vertical,
         );
         final compactMobile = isPhone && usableViewportHeight < 700;
+        final imageLogicalWidth = isDesktop
+            ? constraints.maxWidth * 11 / 20
+            : constraints.maxWidth;
         final image = _RotatingHeroImage(
           sources: buildHeroImageSources(heroProducts),
           cacheWidth:
-              (constraints.maxWidth * MediaQuery.devicePixelRatioOf(context))
+              (imageLogicalWidth * MediaQuery.devicePixelRatioOf(context))
                   .round(),
         );
         final copy = _HeroCopy(
@@ -488,18 +491,23 @@ class _RotatingHeroImageState extends State<_RotatingHeroImage> {
   Timer? _rotationTimer;
   int _activeIndex = 0;
   bool? _reducedMotion;
+  bool? _tickerEnabled;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final reducedMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    if (_reducedMotion == reducedMotion) return;
+    final tickerEnabled = TickerMode.valuesOf(context).enabled;
+    if (_reducedMotion == reducedMotion && _tickerEnabled == tickerEnabled) {
+      return;
+    }
     _reducedMotion = reducedMotion;
-    if (reducedMotion) {
+    _tickerEnabled = tickerEnabled;
+    if (reducedMotion || !tickerEnabled) {
       _rotationTimer?.cancel();
       _rotationTimer = null;
-      _activeIndex = 0;
+      if (reducedMotion) _activeIndex = 0;
     } else {
       _restartTimer();
     }
@@ -537,7 +545,11 @@ class _RotatingHeroImageState extends State<_RotatingHeroImage> {
   void _restartTimer() {
     _rotationTimer?.cancel();
     _rotationTimer = null;
-    if (_reducedMotion != false || widget.sources.length < 2) return;
+    if (_reducedMotion != false ||
+        _tickerEnabled != true ||
+        widget.sources.length < 2) {
+      return;
+    }
 
     _rotationTimer = Timer.periodic(_RotatingHeroImage.rotationInterval, (_) {
       if (!mounted || widget.sources.length < 2) return;
@@ -657,7 +669,11 @@ class _HeroCopy extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compactDesktop = isDesktop && constraints.maxWidth < 520;
+        final compactDesktop = isDesktop && constraints.maxWidth < 560;
+        final tightDesktopHeight =
+            isDesktop &&
+            constraints.maxHeight.isFinite &&
+            constraints.maxHeight < 580;
         final headingSize = isDesktop
             ? compactDesktop
                   ? 38.0
@@ -678,7 +694,7 @@ class _HeroCopy extends StatelessWidget {
             : isNarrow
             ? StorefrontSpacing.md
             : StorefrontSpacing.lg;
-        final verticalPadding = compactDesktop
+        final verticalPadding = compactDesktop || tightDesktopHeight
             ? StorefrontSpacing.xl
             : isDesktop
             ? StorefrontSpacing.xxl
@@ -705,7 +721,7 @@ class _HeroCopy extends StatelessWidget {
                 ),
               ),
               SizedBox(
-                height: compactDesktop
+                height: compactDesktop || tightDesktopHeight
                     ? StorefrontSpacing.md
                     : isDesktop
                     ? StorefrontSpacing.lg
@@ -738,7 +754,7 @@ class _HeroCopy extends StatelessWidget {
                 ),
               ),
               SizedBox(
-                height: compactDesktop
+                height: compactDesktop || tightDesktopHeight
                     ? StorefrontSpacing.lg
                     : isDesktop
                     ? StorefrontSpacing.xl
@@ -1736,9 +1752,11 @@ class StoreFooter extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) => Container(
         width: double.infinity,
-        padding: EdgeInsets.symmetric(
-          horizontal: StorefrontLayout.gutterFor(constraints.maxWidth),
-          vertical: StorefrontSpacing.xl,
+        padding: EdgeInsets.fromLTRB(
+          StorefrontLayout.gutterFor(constraints.maxWidth),
+          StorefrontSpacing.xl,
+          StorefrontLayout.gutterFor(constraints.maxWidth),
+          StorefrontSpacing.xl + MediaQuery.paddingOf(context).bottom,
         ),
         decoration: const BoxDecoration(
           color: StorefrontColors.surface,

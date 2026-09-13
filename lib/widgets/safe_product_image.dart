@@ -28,7 +28,16 @@ class SafeProductImage extends StatelessWidget {
   final String? semanticLabel;
   final Widget? fallback;
 
-  Widget get _fallback => fallback ?? const Icon(Icons.image_outlined);
+  Widget get _fallback {
+    final fallbackWidget = fallback ?? const Icon(Icons.image_outlined);
+    final label = semanticLabel?.trim();
+    if (label == null || label.isEmpty) return fallbackWidget;
+    return Semantics(
+      image: true,
+      label: label,
+      child: ExcludeSemantics(child: fallbackWidget),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {

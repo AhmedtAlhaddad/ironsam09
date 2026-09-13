@@ -12,6 +12,7 @@ import 'package:ironsam09/data/repositories/store_repository.dart';
 import 'package:ironsam09/admin/admin_service.dart';
 import 'package:ironsam09/admin/admin_widgets.dart';
 import 'package:ironsam09/widgets/catalog_widgets.dart';
+import 'package:ironsam09/widgets/safe_product_image.dart';
 
 void main() {
   test('release builds require a configured Supabase backend', () {
@@ -342,6 +343,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('product-gallery-next')), findsOneWidget);
     expect(find.text('1 / 2'), findsOneWidget);
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('product-gallery-dot-0')))
+          .height,
+      greaterThanOrEqualTo(48),
+    );
 
     await tester.tap(find.byKey(const ValueKey('product-gallery-next')));
     await tester.pumpAndSettle();
@@ -389,6 +396,26 @@ void main() {
     );
     expect(unavailable.onSelected, isNull);
     expect(available.onSelected, isNotNull);
+  });
+
+  testWidgets('failed product images retain their accessible label', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SafeProductImage(
+            url: null,
+            semanticLabel: 'صورة منتج الاختبار',
+          ),
+        ),
+      ),
+    );
+
+    expect(find.bySemanticsLabel('صورة منتج الاختبار'), findsOneWidget);
+    semantics.dispose();
   });
 
   testWidgets('collections page renders the approved storefront flow', (
@@ -732,12 +759,12 @@ void main() {
     await tester.tap(addButton);
     await tester.pump();
 
-    expect(find.text('يرجى اختيار المقاس أولاً'), findsOneWidget);
+    expect(find.text('يرجى اختيار المقاس أولًا'), findsOneWidget);
     expect(find.text('1'), findsNothing);
     await tester.pumpAndSettle();
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
-    expect(find.text('يرجى اختيار المقاس أولاً'), findsNothing);
+    expect(find.text('يرجى اختيار المقاس أولًا'), findsNothing);
   });
 
   test('size range expands and selected size is stored in the cart', () {

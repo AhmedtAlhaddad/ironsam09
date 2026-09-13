@@ -285,10 +285,12 @@ ThemeData buildStorefrontTheme() {
 class StorefrontTheme extends StatelessWidget {
   const StorefrontTheme({required this.child, super.key});
 
+  static final ThemeData _theme = buildStorefrontTheme();
+
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return Theme(data: buildStorefrontTheme(), child: child);
+    return Theme(data: _theme, child: child);
   }
 }

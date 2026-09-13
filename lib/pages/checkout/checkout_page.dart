@@ -208,10 +208,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
         child: Directionality(
           textDirection: TextDirection.rtl,
           child: Scaffold(
-            body: _OrderSuccessView(
-              total: submittedTotal,
-              onReturn: () =>
-                  Navigator.of(context).popUntil((route) => route.isFirst),
+            body: SafeArea(
+              child: _OrderSuccessView(
+                total: submittedTotal,
+                onReturn: () =>
+                    Navigator.of(context).popUntil((route) => route.isFirst),
+              ),
             ),
           ),
         ),
@@ -945,22 +947,27 @@ class _MobileCheckoutBar extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'الإجمالي',
-                    style: TextStyle(
-                      color: StorefrontColors.mutedInk,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
+                  const Expanded(
+                    child: Text(
+                      'الإجمالي',
+                      style: TextStyle(
+                        color: StorefrontColors.mutedInk,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
-                  Text(
-                    '${total.toStringAsFixed(2)} د.ل',
-                    textDirection: TextDirection.rtl,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w900,
+                  const SizedBox(width: StorefrontSpacing.sm),
+                  Flexible(
+                    child: Text(
+                      '${total.toStringAsFixed(2)} د.ل',
+                      textDirection: TextDirection.rtl,
+                      textAlign: TextAlign.end,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                   ),
                 ],
@@ -1075,10 +1082,14 @@ class _OrderSuccessView extends StatelessWidget {
                   child: Icon(Icons.check, color: Colors.white, size: 28),
                 ),
                 const SizedBox(height: 22),
-                const Text(
-                  'تم إرسال طلبك بنجاح.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900),
+                Semantics(
+                  liveRegion: true,
+                  header: true,
+                  child: const Text(
+                    'تم إرسال طلبك بنجاح.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900),
+                  ),
                 ),
                 const SizedBox(height: 10),
                 const Text(
