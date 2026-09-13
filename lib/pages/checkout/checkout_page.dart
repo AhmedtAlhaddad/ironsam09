@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/storefront_theme.dart';
+import '../../data/local/libya_cities.dart';
 import '../../data/models/order.dart';
 import '../../features/cart/cart_state.dart';
 import '../../features/order/whatsapp_order_service.dart';
@@ -20,15 +21,6 @@ class CheckoutPage extends StatefulWidget {
 
 class _CheckoutPageState extends State<CheckoutPage> {
   final whatsappService = const WhatsAppOrderService();
-  static const cities = [
-    'طرابلس',
-    'بنغازي',
-    'مصراتة',
-    'الزاوية',
-    'سبها',
-    'البيضاء',
-    'زليتن',
-  ];
 
   final formKey = GlobalKey<FormState>();
   final fullNameController = TextEditingController();
@@ -288,7 +280,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                                         cityFocus: cityFocus,
                                         addressFocus: addressFocus,
                                         city: city,
-                                        cities: cities,
+                                        cities: libyaCitiesAndAreas,
                                         onCityChanged: (value) =>
                                             setState(() => city = value),
                                       ),
@@ -326,7 +318,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                                       cityFocus: cityFocus,
                                       addressFocus: addressFocus,
                                       city: city,
-                                      cities: cities,
+                                      cities: libyaCitiesAndAreas,
                                       onCityChanged: (value) =>
                                           setState(() => city = value),
                                     ),
