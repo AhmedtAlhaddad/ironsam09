@@ -30,6 +30,8 @@ class AdminPanel extends StatefulWidget {
 class _AdminPanelState extends State<AdminPanel> {
   int index = 0;
   int refreshKey = 0;
+  AdminOrderScope ordersScope = AdminOrderScope.active;
+  String ordersQuery = '';
   static const titles = [
     'لوحة التحكم',
     'المنتجات',
@@ -40,12 +42,47 @@ class _AdminPanelState extends State<AdminPanel> {
   ];
   void refresh() => setState(() => refreshKey++);
 
+  void _goToDashboard() => setState(() {
+    index = 0;
+    ordersScope = AdminOrderScope.active;
+    ordersQuery = '';
+  });
+
+  void _leaveAdmin() => Navigator.of(context).maybePop();
+
+  void _handleBack() {
+    if (index == 0) {
+      _leaveAdmin();
+    } else {
+      _goToDashboard();
+    }
+  }
+
+  void _selectSection(int value) {
+    setState(() {
+      index = value;
+      if (value == 4) {
+        ordersScope = AdminOrderScope.active;
+        ordersQuery = '';
+      }
+    });
+  }
+
+  void _openOrders(AdminOrderScope scope, [String query = '']) {
+    setState(() {
+      index = 4;
+      ordersScope = scope;
+      ordersQuery = query;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final pages = [
-      _Dashboard(
+      AdminDashboardView(
         service: widget.service,
-        onChanged: refresh,
+        onOpenOrders: _openOrders,
+        onOpenSportsCodes: () => setState(() => index = 5),
         key: ValueKey(refreshKey),
       ),
       _Products(
@@ -63,10 +100,12 @@ class _AdminPanelState extends State<AdminPanel> {
         onChanged: refresh,
         key: ValueKey(refreshKey),
       ),
-      _Orders(
+      AdminOrdersView(
         service: widget.service,
         onChanged: refresh,
-        key: ValueKey(refreshKey),
+        initialScope: ordersScope,
+        initialQuery: ordersQuery,
+        key: ValueKey('orders-$refreshKey-${ordersScope.name}-$ordersQuery'),
       ),
       AdminDiscountsView(service: widget.service, key: ValueKey(refreshKey)),
     ];
@@ -77,54 +116,67 @@ class _AdminPanelState extends State<AdminPanel> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final mobile = constraints.maxWidth < 760;
-            return Scaffold(
-              drawer: mobile
-                  ? Drawer(
-                      child: _AdminNavigation(
-                        index: index,
-                        onSelected: (value) {
-                          Navigator.pop(context);
-                          setState(() => index = value);
-                        },
-                      ),
-                    )
-                  : null,
-              appBar: AppBar(
-                leading: mobile
-                    ? Builder(
+            return PopScope<void>(
+              canPop: index == 0,
+              onPopInvokedWithResult: (didPop, _) {
+                if (didPop) return;
+                _handleBack();
+              },
+              child: Scaffold(
+                drawer: mobile
+                    ? Drawer(
+                        child: _AdminNavigation(
+                          index: index,
+                          onSelected: (value) {
+                            Navigator.pop(context);
+                            _selectSection(value);
+                          },
+                        ),
+                      )
+                    : null,
+                appBar: AppBar(
+                  automaticallyImplyLeading: false,
+                  leading: IconButton(
+                    key: const ValueKey('admin-back-button'),
+                    tooltip: 'رجوع',
+                    onPressed: _handleBack,
+                    icon: const Icon(Icons.arrow_forward),
+                  ),
+                  title: Text(
+                    titles[index],
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  actions: [
+                    if (mobile)
+                      Builder(
                         builder: (context) => IconButton(
                           tooltip: 'فتح القائمة',
                           onPressed: () => Scaffold.of(context).openDrawer(),
                           icon: const Icon(Icons.menu),
                         ),
-                      )
-                    : null,
-                title: Text(
-                  titles[index],
-                  style: const TextStyle(fontWeight: FontWeight.w900),
-                ),
-                actions: [
-                  IconButton(
-                    tooltip: 'تحديث',
-                    onPressed: refresh,
-                    icon: const Icon(Icons.refresh),
-                  ),
-                  IconButton(
-                    tooltip: 'تسجيل الخروج',
-                    onPressed: () => widget.service.client.auth.signOut(),
-                    icon: const Icon(Icons.logout),
-                  ),
-                ],
-              ),
-              body: Row(
-                children: [
-                  if (!mobile)
-                    _AdminNavigation(
-                      index: index,
-                      onSelected: (value) => setState(() => index = value),
+                      ),
+                    IconButton(
+                      tooltip: 'تحديث',
+                      onPressed: refresh,
+                      icon: const Icon(Icons.refresh),
                     ),
-                  Expanded(child: pages[index]),
-                ],
+                    IconButton(
+                      tooltip: 'تسجيل الخروج',
+                      onPressed: () => widget.service.client.auth.signOut(),
+                      icon: const Icon(Icons.logout),
+                    ),
+                  ],
+                ),
+                body: Row(
+                  children: [
+                    if (!mobile)
+                      _AdminNavigation(
+                        index: index,
+                        onSelected: _selectSection,
+                      ),
+                    Expanded(child: pages[index]),
+                  ],
+                ),
               ),
             );
           },
@@ -175,6 +227,7 @@ class _AdminNavigation extends StatelessWidget {
                   ? AdminColors.sidebarSelected
                   : Colors.transparent,
               child: ListTile(
+                key: ValueKey('admin-nav-$item'),
                 leading: Icon(
                   icons[item],
                   color: item == index ? Colors.white : AdminColors.sidebarText,
@@ -209,97 +262,152 @@ class _AdminContent extends StatelessWidget {
   const _AdminContent({required this.child});
   final Widget child;
   @override
-  Widget build(BuildContext context) => SingleChildScrollView(
-    padding: const EdgeInsets.all(24),
-    child: Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1320),
-        child: child,
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) => SingleChildScrollView(
+      padding: EdgeInsets.all(constraints.maxWidth < 600 ? 16 : 24),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1320),
+          child: child,
+        ),
       ),
     ),
   );
 }
 
-class _Dashboard extends StatelessWidget {
-  const _Dashboard({required this.service, required this.onChanged, super.key});
-  final AdminService service;
-  final VoidCallback onChanged;
+enum AdminOrderScope { active, delivered, cancelled, all }
+
+enum AdminOrderDateRange { all, today, last7Days, last30Days }
+
+class AdminDashboardView extends StatefulWidget {
+  const AdminDashboardView({
+    required this.service,
+    required this.onOpenOrders,
+    required this.onOpenSportsCodes,
+    super.key,
+  });
+
+  final AdminOperationsService service;
+  final void Function(AdminOrderScope scope, String query) onOpenOrders;
+  final VoidCallback onOpenSportsCodes;
+
+  @override
+  State<AdminDashboardView> createState() => _AdminDashboardViewState();
+}
+
+class _AdminDashboardViewState extends State<AdminDashboardView> {
+  late Future<Map<String, dynamic>> _dashboardFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _dashboardFuture = widget.service.dashboard();
+  }
+
+  void _reload() => setState(() {
+    _dashboardFuture = widget.service.dashboard();
+  });
+
   @override
   Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>>(
-    future: service.dashboard(),
+    future: _dashboardFuture,
     builder: (context, snapshot) {
       if (snapshot.connectionState != ConnectionState.done) {
-        return const Center(child: CircularProgressIndicator());
+        return const _AdminLoadingState(
+          key: ValueKey('admin-dashboard-loading'),
+          label: 'جارٍ تجهيز لوحة التحكم...',
+        );
       }
-      if (snapshot.hasError) {
-        return const _ErrorState(message: 'تعذر تحميل لوحة التحكم.');
+      if (snapshot.hasError || !snapshot.hasData) {
+        return _ErrorState(
+          message: 'تعذر تحميل لوحة التحكم. تحقق من الاتصال وحاول مجددًا.',
+          onRetry: _reload,
+        );
       }
+
       final data = snapshot.data!;
+      final rawActiveOrders = data['active_orders'];
+      final activeOrders = rawActiveOrders is List
+          ? rawActiveOrders
+                .whereType<Map>()
+                .map((row) => Map<String, dynamic>.from(row))
+                .toList()
+          : <Map<String, dynamic>>[];
+      final activeCount =
+          (data['active_orders_count'] as num?)?.toInt() ?? activeOrders.length;
+      final stockAlerts =
+          ((data['low_stock'] as num?)?.toInt() ?? 0) +
+          ((data['out_of_stock'] as num?)?.toInt() ?? 0);
+      final approvedCommission =
+          (data['approved_commissions'] as num?)?.toDouble() ?? 0;
       final metrics = [
-        ('طلبات اليوم', '${data['orders_today']}', Icons.today_outlined),
-        ('قيد الانتظار', '${data['pending']}', Icons.pending_actions),
-        ('تم التأكيد', '${data['confirmed']}', Icons.task_alt),
         (
-          'المبيعات المؤكدة',
-          '${(data['sales'] as num).toStringAsFixed(0)} د.ل',
-          Icons.payments_outlined,
-        ),
-        ('مخزون منخفض', '${data['low_stock']}', Icons.warning_amber_outlined),
-        (
-          'نفد المخزون',
-          '${data['out_of_stock']}',
-          Icons.remove_shopping_cart_outlined,
+          'طلبات تحتاج متابعة',
+          '$activeCount',
+          'قيد الانتظار والتأكيد والتجهيز',
+          Icons.assignment_late_outlined,
         ),
         (
-          'قيد الانتظار - غير مستحق حاليًا',
-          '${(data['pending_commissions'] as num).toStringAsFixed(0)} د.ل',
-          Icons.account_balance_wallet_outlined,
+          'طلبات اليوم',
+          '${data['orders_today'] ?? 0}',
+          'حسب تاريخ إنشاء الطلب',
+          Icons.today_outlined,
         ),
         (
-          'المستحق حاليًا',
-          '${(data['approved_commissions'] as num).toStringAsFixed(0)} د.ل',
-          Icons.pending_actions,
+          'بانتظار التأكيد',
+          '${data['pending'] ?? 0}',
+          'لم يُخصم مخزونها بعد',
+          Icons.schedule_outlined,
         ),
         (
-          'تم دفعه سابقًا',
-          '${(data['paid_commissions'] as num).toStringAsFixed(0)} د.ل',
-          Icons.payments_outlined,
+          'تنبيهات المخزون',
+          '$stockAlerts',
+          'منخفض أو نافد',
+          Icons.inventory_2_outlined,
         ),
       ];
+
       return _AdminContent(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              'نظرة عامة',
-              style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900),
+              'نظرة تشغيلية',
+              style: TextStyle(
+                color: AdminColors.textPrimary,
+                fontSize: 30,
+                fontWeight: FontWeight.w900,
+              ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             const Text(
-              'بيانات مباشرة من قاعدة البيانات.',
-              style: TextStyle(color: Colors.black54),
+              'ما يحتاج انتباهك الآن، في مكان واحد.',
+              style: TextStyle(color: AdminColors.textSecondary, fontSize: 14),
             ),
-            const SizedBox(height: 22),
+            const SizedBox(height: 20),
             LayoutBuilder(
               builder: (context, constraints) {
-                final columns = constraints.maxWidth > 980
-                    ? 3
-                    : constraints.maxWidth > 540
+                final columns = constraints.maxWidth >= 1040
+                    ? 4
+                    : constraints.maxWidth >= 560
                     ? 2
                     : 1;
-                return GridView.count(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisCount: columns,
-                  childAspectRatio: columns == 1 ? 4 : 2.5,
-                  crossAxisSpacing: 14,
-                  mainAxisSpacing: 14,
+                final gap = 12.0;
+                final width =
+                    (constraints.maxWidth - (gap * (columns - 1))) / columns;
+                return Wrap(
+                  spacing: gap,
+                  runSpacing: gap,
                   children: metrics
                       .map(
-                        (metric) => _Metric(
-                          label: metric.$1,
-                          value: metric.$2,
-                          icon: metric.$3,
+                        (metric) => SizedBox(
+                          width: width,
+                          child: _Metric(
+                            label: metric.$1,
+                            value: metric.$2,
+                            supportingText: metric.$3,
+                            icon: metric.$4,
+                          ),
                         ),
                       )
                       .toList(),
@@ -307,6 +415,48 @@ class _Dashboard extends StatelessWidget {
               },
             ),
             const SizedBox(height: 20),
+            AdminSectionCard(
+              title: 'الطلبات التي تحتاج متابعة',
+              subtitle: activeCount > activeOrders.length
+                  ? 'أحدث ${activeOrders.length} طلبًا من أصل $activeCount'
+                  : 'الطلبات قيد الانتظار أو التأكيد أو التجهيز',
+              action: TextButton.icon(
+                key: const ValueKey('admin-dashboard-view-all-orders'),
+                onPressed: () => widget.onOpenOrders(AdminOrderScope.all, ''),
+                icon: const Icon(Icons.arrow_back, size: 18),
+                label: const Text('عرض كل الطلبات'),
+              ),
+              child: activeOrders.isEmpty
+                  ? const _EmptyState(
+                      key: ValueKey('admin-dashboard-active-empty'),
+                      message:
+                          'لا توجد طلبات تحتاج متابعة حاليًا. كل العمليات مكتملة.',
+                      positive: true,
+                    )
+                  : Column(
+                      children: [
+                        for (var i = 0; i < activeOrders.length; i++) ...[
+                          _DashboardOrderRow(
+                            row: activeOrders[i],
+                            onOpen: () => widget.onOpenOrders(
+                              AdminOrderScope.active,
+                              '${activeOrders[i]['order_number'] ?? ''}',
+                            ),
+                          ),
+                          if (i != activeOrders.length - 1)
+                            const Divider(height: 1),
+                        ],
+                      ],
+                    ),
+            ),
+            if (approvedCommission > 0) ...[
+              const SizedBox(height: 14),
+              _ActionAlert(
+                key: const ValueKey('admin-dashboard-payable-alert'),
+                amount: approvedCommission,
+                onPressed: widget.onOpenSportsCodes,
+              ),
+            ],
           ],
         ),
       );
@@ -315,38 +465,256 @@ class _Dashboard extends StatelessWidget {
 }
 
 class _Metric extends StatelessWidget {
-  const _Metric({required this.label, required this.value, required this.icon});
-  final String label, value;
+  const _Metric({
+    required this.label,
+    required this.value,
+    required this.supportingText,
+    required this.icon,
+  });
+
+  final String label;
+  final String value;
+  final String supportingText;
   final IconData icon;
+
   @override
-  Widget build(BuildContext context) => Container(
-    color: Colors.white,
-    padding: const EdgeInsets.all(18),
-    child: Row(
-      children: [
-        Icon(icon, color: AdminColors.accent, size: 28),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(color: Colors.black54, fontSize: 12),
+  Widget build(BuildContext context) => Semantics(
+    label: '$label: $value. $supportingText',
+    child: Container(
+      constraints: const BoxConstraints(minHeight: 116),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AdminColors.surface,
+        border: Border.all(color: AdminColors.border),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          ExcludeSemantics(
+            child: Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: AdminColors.accentSoft,
+                borderRadius: BorderRadius.circular(10),
               ),
-              const SizedBox(height: 4),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
+              child: Icon(icon, color: AdminColors.accent, size: 22),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: AdminColors.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: AdminColors.textPrimary,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                    fontFeatures: [FontFeature.tabularFigures()],
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  supportingText,
+                  style: const TextStyle(
+                    color: AdminColors.textSecondary,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _DashboardOrderRow extends StatelessWidget {
+  const _DashboardOrderRow({required this.row, required this.onOpen});
+
+  final Map<String, dynamic> row;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = orderStatusFromString(row['status'] as String? ?? 'pending');
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 720;
+        final identity = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '${row['order_number'] ?? ''}',
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              '${row['customer_name'] ?? ''} · ${row['city'] ?? ''}',
+              style: const TextStyle(
+                color: AdminColors.textSecondary,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        );
+        final statusBadge = AdminStatusBadge(
+          label: orderStatusLabel(status),
+          tone: _orderTone(status),
+          icon: _orderIcon(status),
+        );
+        final details = TextButton.icon(
+          onPressed: onOpen,
+          icon: const Icon(Icons.open_in_new, size: 18),
+          label: const Text('فتح'),
+        );
+
+        if (compact) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                identity,
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    statusBadge,
+                    Text(
+                      _adminMoney(row['total_lyd']),
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    Text(
+                      _formatAdminDate(row['created_at']),
+                      style: const TextStyle(
+                        color: AdminColors.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+                Align(
+                  alignment: AlignmentDirectional.centerEnd,
+                  child: details,
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Row(
+            children: [
+              Expanded(flex: 3, child: identity),
+              SizedBox(
+                width: 200,
+                child: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: statusBadge,
                 ),
               ),
+              Expanded(
+                child: Text(
+                  _adminMoney(row['total_lyd']),
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  _formatAdminDate(row['created_at']),
+                  style: const TextStyle(
+                    color: AdminColors.textSecondary,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              details,
             ],
           ),
-        ),
-      ],
+        );
+      },
+    );
+  }
+}
+
+class _ActionAlert extends StatelessWidget {
+  const _ActionAlert({
+    required this.amount,
+    required this.onPressed,
+    super.key,
+  });
+
+  final double amount;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsetsDirectional.fromSTEB(16, 12, 12, 12),
+    decoration: BoxDecoration(
+      color: AdminColors.successSoft,
+      border: Border.all(color: AdminColors.success.withValues(alpha: .28)),
+      borderRadius: BorderRadius.circular(14),
+    ),
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final message = Row(
+          children: [
+            const ExcludeSemantics(
+              child: Icon(
+                Icons.account_balance_wallet_outlined,
+                color: AdminColors.success,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'عمولات مستحقة للدفع: ${amount.toStringAsFixed(0)} د.ل',
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+            ),
+          ],
+        );
+        final action = TextButton.icon(
+          key: const ValueKey('admin-dashboard-open-sports-codes'),
+          onPressed: onPressed,
+          icon: const Icon(Icons.arrow_back, size: 18),
+          label: const Text('عرض الرموز'),
+        );
+        if (constraints.maxWidth < 520) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              message,
+              Align(alignment: AlignmentDirectional.centerEnd, child: action),
+            ],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: message),
+            const SizedBox(width: 16),
+            action,
+          ],
+        );
+      },
     ),
   );
 }
@@ -1983,146 +2351,412 @@ class _InventoryState extends State<_Inventory> {
   }
 }
 
-class _Orders extends StatefulWidget {
-  const _Orders({required this.service, required this.onChanged, super.key});
-  final AdminService service;
-  final VoidCallback onChanged;
-  @override
-  State<_Orders> createState() => _OrdersState();
+List<Map<String, dynamic>> filterAdminOrders(
+  Iterable<Map<String, dynamic>> source, {
+  required String query,
+  required AdminOrderScope scope,
+  required AdminOrderDateRange dateRange,
+  DateTime? now,
+}) {
+  final normalizedQuery = query.trim().toLowerCase();
+  final reference = (now ?? DateTime.now()).toLocal();
+  final today = DateTime(reference.year, reference.month, reference.day);
+  final start = switch (dateRange) {
+    AdminOrderDateRange.all => null,
+    AdminOrderDateRange.today => today,
+    AdminOrderDateRange.last7Days => today.subtract(const Duration(days: 6)),
+    AdminOrderDateRange.last30Days => today.subtract(const Duration(days: 29)),
+  };
+
+  return source
+      .where((row) {
+        final status = row['status'] as String?;
+        final matchesScope = switch (scope) {
+          AdminOrderScope.active => adminActiveOrderStatuses.contains(status),
+          AdminOrderScope.delivered => status == 'delivered',
+          AdminOrderScope.cancelled => status == 'cancelled',
+          AdminOrderScope.all => true,
+        };
+        if (!matchesScope) return false;
+
+        if (normalizedQuery.isNotEmpty) {
+          final searchable =
+              '${row['order_number'] ?? ''} ${row['customer_name'] ?? ''} ${row['phone'] ?? ''}'
+                  .toLowerCase();
+          if (!searchable.contains(normalizedQuery)) return false;
+        }
+
+        if (start != null) {
+          final createdAt = DateTime.tryParse(
+            row['created_at'] as String? ?? '',
+          )?.toLocal();
+          if (createdAt == null || createdAt.isBefore(start)) return false;
+        }
+        return true;
+      })
+      .toList(growable: false);
 }
 
-class _OrdersState extends State<_Orders> {
-  String query = '';
+class AdminOrdersView extends StatefulWidget {
+  const AdminOrdersView({
+    required this.service,
+    required this.onChanged,
+    this.initialScope = AdminOrderScope.active,
+    this.initialQuery = '',
+    super.key,
+  });
+
+  final AdminOperationsService service;
+  final VoidCallback onChanged;
+  final AdminOrderScope initialScope;
+  final String initialQuery;
+
+  @override
+  State<AdminOrdersView> createState() => _AdminOrdersViewState();
+}
+
+class _AdminOrdersViewState extends State<AdminOrdersView> {
+  late String query;
+  late AdminOrderScope scope;
+  AdminOrderDateRange dateRange = AdminOrderDateRange.all;
   late Future<List<Map<String, dynamic>>> _ordersFuture;
+  late final TextEditingController _searchController;
+  final Set<String> _updatingOrderIds = {};
 
   @override
   void initState() {
     super.initState();
+    query = widget.initialQuery;
+    scope = widget.initialScope;
+    _searchController = TextEditingController(text: query);
     _ordersFuture = widget.service.orders();
   }
 
   @override
-  Widget build(
-    BuildContext context,
-  ) => FutureBuilder<List<Map<String, dynamic>>>(
-    future: _ordersFuture,
-    builder: (context, snapshot) {
-      if (snapshot.connectionState != ConnectionState.done) {
-        return const Center(child: CircularProgressIndicator());
-      }
-      if (snapshot.hasError) {
-        return const _ErrorState(message: 'تعذر تحميل الطلبات.');
-      }
-      final rows = snapshot.data!
-          .where(
-            (row) =>
-                query.isEmpty ||
-                '${row['order_number']} ${row['customer_name']} ${row['phone']}'
-                    .toLowerCase()
-                    .contains(query.toLowerCase()),
-          )
-          .toList();
-      return _AdminContent(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'الطلبات',
-              style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900),
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _reload() => setState(() {
+    _ordersFuture = widget.service.orders();
+  });
+
+  void _resetFilters() => setState(() {
+    query = '';
+    scope = AdminOrderScope.active;
+    dateRange = AdminOrderDateRange.all;
+    _searchController.clear();
+  });
+
+  @override
+  Widget build(BuildContext context) =>
+      FutureBuilder<List<Map<String, dynamic>>>(
+        future: _ordersFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const _AdminLoadingState(
+              key: ValueKey('admin-orders-loading'),
+              label: 'جارٍ تحميل الطلبات...',
+            );
+          }
+          if (snapshot.hasError) {
+            return _ErrorState(
+              message: 'تعذر تحميل الطلبات. تحقق من الاتصال وحاول مجددًا.',
+              onRetry: _reload,
+            );
+          }
+          final rows = filterAdminOrders(
+            snapshot.data!,
+            query: query,
+            scope: scope,
+            dateRange: dateRange,
+          );
+          return _AdminContent(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'سجل الطلبات',
+                  style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'ابحث في الطلبات النشطة والمكتملة والملغاة دون تغيير السجل.',
+                  style: TextStyle(
+                    color: AdminColors.textSecondary,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                AdminSectionCard(
+                  title: 'البحث والتصفية',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TextField(
+                        key: const ValueKey('admin-orders-search'),
+                        controller: _searchController,
+                        textDirection: TextDirection.rtl,
+                        textAlign: TextAlign.right,
+                        onChanged: (value) => setState(() => query = value),
+                        decoration: adminRtlInputDecoration(
+                          const InputDecoration(
+                            prefixIcon: Icon(Icons.search),
+                            labelText: 'بحث في الطلبات',
+                            hintText: 'رقم الطلب أو العميل أو الهاتف',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: AdminOrderScope.values
+                            .map(
+                              (item) => ChoiceChip(
+                                key: ValueKey('admin-order-scope-${item.name}'),
+                                label: Text(_adminOrderScopeLabel(item)),
+                                selected: scope == item,
+                                onSelected: (_) => setState(() => scope = item),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                      const SizedBox(height: 14),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 10,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          SizedBox(
+                            key: const ValueKey('admin-orders-date-filter'),
+                            width: 220,
+                            child: DropdownButtonFormField<AdminOrderDateRange>(
+                              key: ValueKey(
+                                'admin-orders-date-filter-${dateRange.name}',
+                              ),
+                              initialValue: dateRange,
+                              isExpanded: true,
+                              decoration: const InputDecoration(
+                                labelText: 'تاريخ الإنشاء',
+                                prefixIcon: Icon(Icons.date_range_outlined),
+                              ),
+                              items: AdminOrderDateRange.values
+                                  .map(
+                                    (item) => DropdownMenuItem(
+                                      value: item,
+                                      child: adminRtlDropdownItem(
+                                        _adminOrderDateLabel(item),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (value) {
+                                if (value != null) {
+                                  setState(() => dateRange = value);
+                                }
+                              },
+                            ),
+                          ),
+                          OutlinedButton.icon(
+                            key: const ValueKey('admin-orders-reset-filters'),
+                            onPressed: _resetFilters,
+                            icon: const Icon(Icons.restart_alt),
+                            label: const Text('إعادة ضبط الفلاتر'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'النتائج: ${rows.length}',
+                  style: const TextStyle(
+                    color: AdminColors.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                if (rows.isEmpty)
+                  _EmptyState(
+                    key: const ValueKey('admin-orders-empty'),
+                    message:
+                        scope == AdminOrderScope.active &&
+                            query.isEmpty &&
+                            dateRange == AdminOrderDateRange.all
+                        ? 'لا توجد طلبات تحتاج متابعة حاليًا.'
+                        : 'لا توجد طلبات مطابقة للفلاتر الحالية.',
+                    positive: scope == AdminOrderScope.active,
+                  )
+                else
+                  ...rows.map(_orderRow),
+              ],
             ),
-            const SizedBox(height: 18),
-            SizedBox(
-              width: 320,
-              child: TextField(
-                textDirection: TextDirection.rtl,
-                textAlign: TextAlign.right,
-                onChanged: (value) => setState(() => query = value),
-                decoration: adminRtlInputDecoration(
-                  const InputDecoration(
-                    prefixIcon: Icon(Icons.search),
-                    labelText: 'بحث بالطلب أو العميل',
+          );
+        },
+      );
+  Widget _orderRow(Map<String, dynamic> row) {
+    final status = orderStatusFromString(row['status'] as String? ?? 'pending');
+    final id = row['id'] as String? ?? '';
+    final updating = _updatingOrderIds.contains(id);
+    final identity = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          '${row['order_number'] ?? ''} · ${row['customer_name'] ?? ''}',
+          style: const TextStyle(fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '${row['phone'] ?? ''} · ${row['city'] ?? ''}',
+          style: const TextStyle(
+            color: AdminColors.textSecondary,
+            fontSize: 12,
+          ),
+        ),
+      ],
+    );
+    final badge = AdminStatusBadge(
+      label: orderStatusLabel(status),
+      tone: _orderTone(status),
+      icon: _orderIcon(status),
+    );
+    final statusControl = SizedBox(
+      width: 180,
+      height: 48,
+      child: DropdownButton<String>(
+        isExpanded: true,
+        alignment: AlignmentDirectional.centerStart,
+        value: status.name,
+        items: OrderStatus.values
+            .map(
+              (item) => DropdownMenuItem(
+                value: item.name,
+                child: adminRtlDropdownItem(orderStatusLabel(item)),
+              ),
+            )
+            .toList(),
+        onChanged: updating ? null : (value) => _updateOrderStatus(row, value),
+      ),
+    );
+    final openButton = OutlinedButton.icon(
+      onPressed: () => _details(row),
+      icon: const Icon(Icons.visibility_outlined, size: 18),
+      label: const Text('فتح'),
+    );
+
+    return Container(
+      key: ValueKey('admin-order-row-$id'),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AdminColors.surface,
+        border: Border.all(color: AdminColors.border),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 820) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                identity,
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    badge,
+                    Text(
+                      _adminMoney(row['total_lyd']),
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    Text(
+                      _formatAdminDate(row['created_at']),
+                      style: const TextStyle(
+                        color: AdminColors.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 12,
+                  runSpacing: 8,
+                  children: [statusControl, openButton],
+                ),
+              ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(flex: 3, child: identity),
+              SizedBox(
+                width: 200,
+                child: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: badge,
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  _adminMoney(row['total_lyd']),
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  _formatAdminDate(row['created_at']),
+                  style: const TextStyle(
+                    color: AdminColors.textSecondary,
+                    fontSize: 12,
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 18),
-            if (rows.isEmpty)
-              const _EmptyState(message: 'لا توجد طلبات مطابقة.')
-            else
-              ...rows.map(_orderRow),
-          ],
-        ),
-      );
-    },
-  );
-  Widget _orderRow(Map<String, dynamic> row) {
-    final status = orderStatusFromString(row['status'] as String? ?? 'pending');
-    return InkWell(
-      onTap: () => _details(row),
-      child: Container(
-        color: Colors.white,
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(15),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${row['order_number'] ?? ''}  ·  ${row['customer_name'] ?? ''}',
-                    style: const TextStyle(fontWeight: FontWeight.w900),
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    '${row['phone'] ?? ''}  ·  ${row['city'] ?? ''}  ·  ${row['total_lyd'] ?? 0} د.ل',
-                    style: const TextStyle(color: Colors.black54, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-            AdminStatusBadge(
-              label: orderStatusLabel(status),
-              tone: _orderTone(status),
-            ),
-            const SizedBox(width: 8),
-            DropdownButton<String>(
-              alignment: AlignmentDirectional.centerStart,
-              value: status.name,
-              items: OrderStatus.values
-                  .map(
-                    (item) => DropdownMenuItem(
-                      value: item.name,
-                      child: adminRtlDropdownItem(orderStatusLabel(item)),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (value) async {
-                if (value == null) return;
-                try {
-                  await widget.service.updateOrderStatus(
-                    row['id'] as String,
-                    value,
-                  );
-                  widget.onChanged();
-                  if (mounted) {
-                    showAdminMessage(context, 'تم تحديث حالة الطلب.');
-                  }
-                } catch (_) {
-                  if (mounted) {
-                    showAdminMessage(
-                      context,
-                      'تعذر تحديث الحالة. تحقق من المخزون.',
-                      error: true,
-                    );
-                  }
-                }
-              },
-            ),
-          ],
-        ),
+              statusControl,
+              const SizedBox(width: 10),
+              openButton,
+            ],
+          );
+        },
       ),
     );
+  }
+
+  Future<void> _updateOrderStatus(
+    Map<String, dynamic> row,
+    String? value,
+  ) async {
+    if (value == null || value == row['status']) return;
+    final id = row['id'] as String?;
+    if (id == null || _updatingOrderIds.contains(id)) return;
+    setState(() => _updatingOrderIds.add(id));
+    try {
+      await widget.service.updateOrderStatus(id, value);
+      widget.onChanged();
+      if (mounted) {
+        showAdminMessage(context, 'تم تحديث حالة الطلب.');
+        _reload();
+      }
+    } catch (_) {
+      if (mounted) {
+        showAdminMessage(
+          context,
+          'تعذر تحديث الحالة. راجع تسلسل الحالة وتوفر المخزون.',
+          error: true,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _updatingOrderIds.remove(id));
+    }
   }
 
   Future<void> _details(Map<String, dynamic> row) async {
@@ -2216,6 +2850,8 @@ class AdminDiscountsView extends StatefulWidget {
 
 class _AdminDiscountsViewState extends State<AdminDiscountsView> {
   late Future<List<Map<String, dynamic>>> _codesFuture;
+  late Future<List<PayableCommissionGroup>> _payablesFuture;
+  List<PayableCommissionGroup> _payableGroups = const [];
   Map<String, dynamic>? _selectedRow;
   Future<DiscountPerformance>? _performanceFuture;
   final Set<String> _pendingCodeIds = {};
@@ -2225,7 +2861,18 @@ class _AdminDiscountsViewState extends State<AdminDiscountsView> {
   void initState() {
     super.initState();
     _codesFuture = widget.service.discounts();
+    _payablesFuture = _loadPayables();
   }
+
+  Future<List<PayableCommissionGroup>> _loadPayables() async {
+    final groups = await widget.service.payableCommissions();
+    _payableGroups = groups;
+    return groups;
+  }
+
+  void _retryPayables() => setState(() {
+    _payablesFuture = _loadPayables();
+  });
 
   void _openDetails(Map<String, dynamic> row) {
     final code = row['code'] as String? ?? '';
@@ -2237,12 +2884,17 @@ class _AdminDiscountsViewState extends State<AdminDiscountsView> {
 
   Future<void> _reload() async {
     final selectedId = _selectedRow?['id'];
-    final rows = await widget.service.discounts();
+    final codesRequest = widget.service.discounts();
+    final payablesRequest = widget.service.payableCommissions();
+    final rows = await codesRequest;
+    final payables = await payablesRequest;
     if (!mounted) return;
     final refreshed = rows.where((row) => row['id'] == selectedId).firstOrNull;
     final refreshedCode = refreshed?['code'] as String?;
     setState(() {
       _codesFuture = Future.value(rows);
+      _payableGroups = payables;
+      _payablesFuture = Future.value(payables);
       _hiddenCodeIds.clear();
       _selectedRow = selectedId == null ? null : refreshed;
       _performanceFuture = refreshedCode == null
@@ -2320,6 +2972,31 @@ class _AdminDiscountsViewState extends State<AdminDiscountsView> {
                 ],
               ),
               const SizedBox(height: 18),
+              FutureBuilder<List<PayableCommissionGroup>>(
+                future: _payablesFuture,
+                builder: (context, payableSnapshot) {
+                  if (payableSnapshot.connectionState != ConnectionState.done) {
+                    return const _PayableCommissionLoading();
+                  }
+                  if (payableSnapshot.hasError) {
+                    return _PayableCommissionError(onRetry: _retryPayables);
+                  }
+                  final groups = payableSnapshot.data ?? const [];
+                  if (groups.isEmpty) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 18),
+                    child: _PayableCommissionsSection(
+                      groups: groups,
+                      onInspect: _inspectPayable,
+                      onPay: (group) => _payInfluencer(
+                        context,
+                        influencerId: group.influencerId,
+                        amount: group.amount,
+                      ),
+                    ),
+                  );
+                },
+              ),
               if (rows.isEmpty)
                 const _EmptyState(message: 'لا توجد رموز رياضية بعد.'),
               ...rows.map((row) => _row(context, row)),
@@ -2659,7 +3336,12 @@ class _AdminDiscountsViewState extends State<AdminDiscountsView> {
               onPressed:
                   performance.commission.approved > 0 &&
                       performance.influencerId != null
-                  ? () => _pay(context, performance)
+                  ? () => _payInfluencer(
+                      context,
+                      influencerId: performance.influencerId!,
+                      amount: performance.commission.approved,
+                      selectedPerformance: performance,
+                    )
                   : null,
               icon: const Icon(Icons.payments_outlined),
               label: const Text('تأكيد دفع المستحقات'),
@@ -2670,26 +3352,128 @@ class _AdminDiscountsViewState extends State<AdminDiscountsView> {
     );
   }
 
-  Future<void> _pay(
-    BuildContext context,
-    DiscountPerformance performance,
-  ) async {
-    final influencerId = performance.influencerId;
-    if (performance.commission.approved <= 0 || influencerId == null) return;
+  Future<void> _inspectPayable(PayableCommissionGroup group) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: AdminDialogHeader(title: 'مستحقات ${group.influencerName}'),
+          content: SizedBox(
+            width: 560,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'إجمالي المستحق: ${_lyd(group.amount)}',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  for (final order in group.orders)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AdminColors.background,
+                        border: Border.all(color: AdminColors.border),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  order.orderNumber.isEmpty
+                                      ? 'طلب بدون رقم ظاهر'
+                                      : order.orderNumber,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  order.discountCode?.isNotEmpty == true
+                                      ? 'الرمز: ${order.discountCode}'
+                                      : 'الرمز الأصلي غير متاح',
+                                  style: const TextStyle(
+                                    color: AdminColors.textSecondary,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            _lyd(order.amount),
+                            style: const TextStyle(fontWeight: FontWeight.w900),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('إغلاق'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _payInfluencer(
+    BuildContext context, {
+    required String influencerId,
+    required double amount,
+    DiscountPerformance? selectedPerformance,
+  }) async {
+    if (amount <= 0) return;
     final confirmed = await confirmAdminAction(
       context,
       title: 'تأكيد دفع المستحقات',
       message:
-          'سيتم تسجيل العمولات المستحقة الحالية كمدفوعة.\nلن يتم حذف سجل العمولات السابقة.',
+          'سيتم تسجيل مستحقات بقيمة ${_lyd(amount)} كمدفوعة.\nلن يتم حذف سجل العمولات السابقة.',
       confirmLabel: 'تأكيد الدفع',
     );
     if (!confirmed || !context.mounted) return;
+
+    late final Map<String, dynamic> result;
     try {
-      final result = await widget.service.markInfluencerCommissionsPaid(
-        influencerId,
-      );
-      await _reload();
-      if (!context.mounted) return;
+      result = await widget.service.markInfluencerCommissionsPaid(influencerId);
+    } catch (error, stackTrace) {
+      debugPrint('Admin payout write failed: $error\n$stackTrace');
+      if (context.mounted) {
+        showAdminMessage(context, 'تعذر تسجيل الدفع.', error: true);
+      }
+      return;
+    }
+
+    if (!mounted || !context.mounted) return;
+    setState(() {
+      _payableGroups = _payableGroups
+          .where((group) => group.influencerId != influencerId)
+          .toList(growable: false);
+      _payablesFuture = Future.value(_payableGroups);
+      if (selectedPerformance != null) {
+        _performanceFuture = Future.value(
+          selectedPerformance.withApprovedMarkedPaid(),
+        );
+      }
+    });
+
+    final refreshed = await _refreshAfterWrite(operation: 'payout');
+    if (refreshed && context.mounted) {
       final ordersPaid = (result['orders_paid'] as num?)?.toInt() ?? 0;
       final totalPaid =
           (result['total_paid'] as num?)?.toStringAsFixed(0) ?? '0';
@@ -2697,11 +3481,6 @@ class _AdminDiscountsViewState extends State<AdminDiscountsView> {
         context,
         'تم تسجيل $ordersPaid طلبات كمدفوعة بقيمة $totalPaid د.ل.',
       );
-    } catch (error, stackTrace) {
-      debugPrint('Admin payout failed: $error\n$stackTrace');
-      if (context.mounted) {
-        showAdminMessage(context, 'تعذر تسجيل الدفع.', error: true);
-      }
     }
   }
 
@@ -2732,6 +3511,203 @@ class _AdminDiscountsViewState extends State<AdminDiscountsView> {
       showAdminMessage(context, 'تم حفظ الرمز.');
     }
   }
+}
+
+class _PayableCommissionsSection extends StatelessWidget {
+  const _PayableCommissionsSection({
+    required this.groups,
+    required this.onInspect,
+    required this.onPay,
+  });
+
+  final List<PayableCommissionGroup> groups;
+  final ValueChanged<PayableCommissionGroup> onInspect;
+  final ValueChanged<PayableCommissionGroup> onPay;
+
+  @override
+  Widget build(BuildContext context) => AdminSectionCard(
+    key: const ValueKey('sports-codes-payable-section'),
+    title: 'مستحقات تحتاج دفع',
+    subtitle:
+        'مجمعة حسب الرياضي لأن إجراء الدفع الحالي يسجل جميع مستحقاته المعتمدة دفعة واحدة.',
+    child: Column(
+      children: [
+        for (var index = 0; index < groups.length; index++) ...[
+          _PayableCommissionCard(
+            group: groups[index],
+            onInspect: () => onInspect(groups[index]),
+            onPay: () => onPay(groups[index]),
+          ),
+          if (index != groups.length - 1) const SizedBox(height: 10),
+        ],
+      ],
+    ),
+  );
+}
+
+class _PayableCommissionCard extends StatelessWidget {
+  const _PayableCommissionCard({
+    required this.group,
+    required this.onInspect,
+    required this.onPay,
+  });
+
+  final PayableCommissionGroup group;
+  final VoidCallback onInspect;
+  final VoidCallback onPay;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasUnavailableCode = group.orders.any(
+      (order) => order.discountCode == null || order.discountCode!.isEmpty,
+    );
+    final codeText = group.codes.isEmpty
+        ? 'الرمز الأصلي غير متاح'
+        : 'الرموز: ${group.codes.join('، ')}'
+              '${hasUnavailableCode ? ' · وبعض الطلبات بلا رمز متاح' : ''}';
+    final identity = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          group.influencerName,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '$codeText · ${group.orders.length} طلب',
+          style: const TextStyle(
+            color: AdminColors.textSecondary,
+            fontSize: 12,
+          ),
+        ),
+      ],
+    );
+    final amount = Semantics(
+      label: 'المستحق للدفع ${_lyd(group.amount)}',
+      child: Text(
+        _lyd(group.amount),
+        style: const TextStyle(
+          color: AdminColors.success,
+          fontSize: 20,
+          fontWeight: FontWeight.w900,
+          fontFeatures: [FontFeature.tabularFigures()],
+        ),
+      ),
+    );
+    final actions = Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        OutlinedButton.icon(
+          key: ValueKey('payable-inspect-${group.influencerId}'),
+          onPressed: onInspect,
+          icon: const Icon(Icons.receipt_long_outlined, size: 18),
+          label: const Text('عرض التفاصيل'),
+        ),
+        FilledButton.icon(
+          key: ValueKey('payable-pay-${group.influencerId}'),
+          onPressed: onPay,
+          icon: const Icon(Icons.payments_outlined, size: 18),
+          label: const Text('تأكيد الدفع'),
+        ),
+      ],
+    );
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AdminColors.successSoft,
+        border: Border.all(color: AdminColors.success.withValues(alpha: .24)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 720) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                identity,
+                const SizedBox(height: 10),
+                amount,
+                const SizedBox(height: 10),
+                actions,
+              ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: identity),
+              const SizedBox(width: 16),
+              amount,
+              const SizedBox(width: 18),
+              actions,
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _PayableCommissionLoading extends StatelessWidget {
+  const _PayableCommissionLoading();
+
+  @override
+  Widget build(BuildContext context) => const Padding(
+    padding: EdgeInsets.only(bottom: 18),
+    child: AdminSectionCard(
+      title: 'مستحقات تحتاج دفع',
+      child: LinearProgressIndicator(minHeight: 2),
+    ),
+  );
+}
+
+class _PayableCommissionError extends StatelessWidget {
+  const _PayableCommissionError({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 18),
+    child: AdminSectionCard(
+      title: 'مستحقات تحتاج دفع',
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const message = Text(
+            'تعذر تحميل المستحقات. قائمة الرموز ما زالت متاحة.',
+            style: TextStyle(color: AdminColors.textSecondary),
+          );
+          final retry = TextButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh, size: 18),
+            label: const Text('إعادة المحاولة'),
+          );
+          if (constraints.maxWidth < 520) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                message,
+                const SizedBox(height: 8),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: retry,
+                ),
+              ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: message),
+              const SizedBox(width: 12),
+              retry,
+            ],
+          );
+        },
+      ),
+    ),
+  );
 }
 
 class _DiscountFormDialog extends StatefulWidget {
@@ -2967,24 +3943,110 @@ class _InfoMetric extends StatelessWidget {
 String _lyd(double value) => '${value.toStringAsFixed(0)} د.ل';
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.message});
+  const _EmptyState({required this.message, this.positive = false, super.key});
   final String message;
+  final bool positive;
+
   @override
-  Widget build(BuildContext context) => Container(
-    color: Colors.white,
-    padding: const EdgeInsets.all(34),
-    child: Center(child: Text(message, textAlign: TextAlign.center)),
+  Widget build(BuildContext context) => Semantics(
+    liveRegion: true,
+    label: message,
+    child: Container(
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        color: positive ? AdminColors.successSoft : AdminColors.surface,
+        border: Border.all(
+          color: positive
+              ? AdminColors.success.withValues(alpha: .22)
+              : AdminColors.border,
+        ),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ExcludeSemantics(
+            child: Icon(
+              positive ? Icons.check_circle_outline : Icons.inbox_outlined,
+              color: positive ? AdminColors.success : AdminColors.textSecondary,
+              size: 28,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
+    ),
   );
 }
 
 class _ErrorState extends StatelessWidget {
-  const _ErrorState({required this.message});
+  const _ErrorState({required this.message, this.onRetry});
   final String message;
+  final VoidCallback? onRetry;
+
   @override
   Widget build(BuildContext context) => Center(
     child: Padding(
       padding: const EdgeInsets.all(34),
-      child: Text(message, textAlign: TextAlign.center),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const ExcludeSemantics(
+            child: Icon(
+              Icons.cloud_off_outlined,
+              color: AdminColors.danger,
+              size: 30,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(message, textAlign: TextAlign.center),
+          if (onRetry != null) ...[
+            const SizedBox(height: 14),
+            OutlinedButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('إعادة المحاولة'),
+            ),
+          ],
+        ],
+      ),
+    ),
+  );
+}
+
+class _AdminLoadingState extends StatelessWidget {
+  const _AdminLoadingState({required this.label, super.key});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Semantics(
+      liveRegion: true,
+      label: label,
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(
+              width: 26,
+              height: 26,
+              child: CircularProgressIndicator(strokeWidth: 2.4),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              label,
+              style: const TextStyle(color: AdminColors.textSecondary),
+            ),
+          ],
+        ),
+      ),
     ),
   );
 }
@@ -3033,3 +4095,37 @@ AdminStatusTone _orderTone(OrderStatus status) => switch (status) {
   OrderStatus.delivered => AdminStatusTone.neutral,
   OrderStatus.cancelled => AdminStatusTone.danger,
 };
+
+IconData _orderIcon(OrderStatus status) => switch (status) {
+  OrderStatus.pending => Icons.schedule_outlined,
+  OrderStatus.confirmed => Icons.check_circle_outline,
+  OrderStatus.preparing => Icons.inventory_2_outlined,
+  OrderStatus.delivered => Icons.local_shipping_outlined,
+  OrderStatus.cancelled => Icons.cancel_outlined,
+};
+
+String _adminOrderScopeLabel(AdminOrderScope scope) => switch (scope) {
+  AdminOrderScope.active => 'النشطة',
+  AdminOrderScope.delivered => 'تم التوصيل',
+  AdminOrderScope.cancelled => 'ملغاة',
+  AdminOrderScope.all => 'الكل',
+};
+
+String _adminOrderDateLabel(AdminOrderDateRange range) => switch (range) {
+  AdminOrderDateRange.all => 'كل التواريخ',
+  AdminOrderDateRange.today => 'اليوم',
+  AdminOrderDateRange.last7Days => 'آخر 7 أيام',
+  AdminOrderDateRange.last30Days => 'آخر 30 يومًا',
+};
+
+String _adminMoney(dynamic raw) {
+  final value = raw is num ? raw.toDouble() : double.tryParse('$raw') ?? 0;
+  return '${value.toStringAsFixed(value == value.roundToDouble() ? 0 : 2)} د.ل';
+}
+
+String _formatAdminDate(dynamic raw) {
+  final date = DateTime.tryParse('$raw')?.toLocal();
+  if (date == null) return 'تاريخ غير متاح';
+  String two(int value) => value.toString().padLeft(2, '0');
+  return '${date.year}/${two(date.month)}/${two(date.day)} · ${two(date.hour)}:${two(date.minute)}';
+}

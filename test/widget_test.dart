@@ -965,6 +965,7 @@ void main() {
         {
           'discount_code': 'STAGE10',
           'influencer_id': 'athlete-1',
+          'status': 'delivered',
           'total_lyd': 100,
           'athlete_commission_amount_lyd': 7,
           'commission_status': 'approved',
@@ -986,6 +987,7 @@ void main() {
         {
           'discount_code': 'OTHER',
           'influencer_id': 'athlete-2',
+          'status': 'delivered',
           'total_lyd': 500,
           'athlete_commission_amount_lyd': 50,
           'commission_status': 'approved',
@@ -1016,6 +1018,7 @@ void main() {
     expect(rpc, contains('if not public.is_admin()'));
     expect(rpc, contains('where influencer_id = p_influencer_id'));
     expect(rpc, contains("commission_status = 'approved'"));
+    expect(rpc, contains("status = 'delivered'"));
     expect(rpc, contains("commission_status = 'paid'"));
     expect(rpc, contains('commission_paid_at = now()'));
     expect(rpc, contains("'orders_paid'"));
