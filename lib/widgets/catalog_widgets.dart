@@ -358,7 +358,11 @@ class _HeaderLink extends StatelessWidget {
         foregroundColor: active ? accentColor : inkColor,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         minimumSize: const Size(48, 48),
-        textStyle: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+        textStyle: const TextStyle(
+          fontFamily: cairoFontFamily,
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+        ),
       ),
       child: AnimatedContainer(
         duration: StorefrontMotion.fast,

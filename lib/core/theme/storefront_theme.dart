@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'app_theme.dart';
 
@@ -81,53 +80,62 @@ abstract final class StorefrontShadows {
 
 ThemeData buildStorefrontTheme() {
   final base = buildAppTheme();
-  final textTheme = GoogleFonts.cairoTextTheme(base.textTheme).copyWith(
-    displayLarge: GoogleFonts.cairo(
+  final textTheme = base.textTheme.copyWith(
+    displayLarge: const TextStyle(
+      fontFamily: cairoFontFamily,
       fontSize: 56,
       height: 1.08,
       fontWeight: FontWeight.w800,
       color: StorefrontColors.ink,
     ),
-    headlineLarge: GoogleFonts.cairo(
+    headlineLarge: const TextStyle(
+      fontFamily: cairoFontFamily,
       fontSize: 36,
       height: 1.2,
       fontWeight: FontWeight.w800,
       color: StorefrontColors.ink,
     ),
-    headlineMedium: GoogleFonts.cairo(
+    headlineMedium: const TextStyle(
+      fontFamily: cairoFontFamily,
       fontSize: 28,
       height: 1.25,
       fontWeight: FontWeight.w800,
       color: StorefrontColors.ink,
     ),
-    titleLarge: GoogleFonts.cairo(
+    titleLarge: const TextStyle(
+      fontFamily: cairoFontFamily,
       fontSize: 20,
       height: 1.35,
       fontWeight: FontWeight.w800,
       color: StorefrontColors.ink,
     ),
-    titleMedium: GoogleFonts.cairo(
+    titleMedium: const TextStyle(
+      fontFamily: cairoFontFamily,
       fontSize: 16,
       height: 1.4,
       fontWeight: FontWeight.w700,
       color: StorefrontColors.ink,
     ),
-    bodyLarge: GoogleFonts.cairo(
+    bodyLarge: const TextStyle(
+      fontFamily: cairoFontFamily,
       fontSize: 16,
       height: 1.65,
       color: StorefrontColors.ink,
     ),
-    bodyMedium: GoogleFonts.cairo(
+    bodyMedium: const TextStyle(
+      fontFamily: cairoFontFamily,
       fontSize: 14,
       height: 1.6,
       color: StorefrontColors.mutedInk,
     ),
-    bodySmall: GoogleFonts.cairo(
+    bodySmall: const TextStyle(
+      fontFamily: cairoFontFamily,
       fontSize: 12,
       height: 1.55,
       color: StorefrontColors.mutedInk,
     ),
-    labelLarge: GoogleFonts.cairo(
+    labelLarge: const TextStyle(
+      fontFamily: cairoFontFamily,
       fontSize: 14,
       fontWeight: FontWeight.w700,
       color: StorefrontColors.ink,

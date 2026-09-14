@@ -34,7 +34,6 @@ dependencies:
   url_launcher: ^6.3.2
   supabase_flutter: ^2.10.0
   file_picker: ^10.3.3
-  google_fonts: ^6.2.1
 
 dev_dependencies:
   flutter_test:
@@ -55,6 +54,20 @@ flutter:
 
   assets:
     - assets/images/iron_sam_logo.png
+
+  fonts:
+    - family: Cairo
+      fonts:
+        - asset: assets/fonts/Cairo-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Cairo-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Cairo-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Cairo-ExtraBold.ttf
+          weight: 800
+        - asset: assets/fonts/Cairo-Black.ttf
+          weight: 900
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in

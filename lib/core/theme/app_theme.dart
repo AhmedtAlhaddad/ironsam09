@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 const canvasColor = Color(0xFFF5F2EC);
 const inkColor = Color(0xFF171714);
 const surfaceColor = Color(0xFFEAE7E0);
 const lineColor = Color(0xFFD6D1C8);
 const accentColor = Color(0xFFB6502E);
+const cairoFontFamily = 'Cairo';
 
 ThemeData buildAppTheme() {
   return ThemeData(
@@ -20,8 +20,8 @@ ThemeData buildAppTheme() {
           onPrimary: Colors.white,
           surface: canvasColor,
         ),
-    fontFamily: GoogleFonts.cairo().fontFamily,
-    textTheme: GoogleFonts.cairoTextTheme(),
+    fontFamily: cairoFontFamily,
+    textTheme: ThemeData.light().textTheme.apply(fontFamily: cairoFontFamily),
     appBarTheme: const AppBarTheme(
       backgroundColor: canvasColor,
       foregroundColor: inkColor,
