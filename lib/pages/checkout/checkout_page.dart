@@ -228,9 +228,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   onPressed: () => Navigator.of(context).pop(),
                   icon: const Icon(Icons.arrow_forward),
                 ),
-                title: const Text(
+                title: Text(
                   'إتمام الطلب',
-                  style: TextStyle(fontWeight: FontWeight.w900),
+                  style: Theme.of(context).textTheme.headlineMedium,
                 ),
                 actions: [
                   IconButton(
@@ -373,54 +373,45 @@ class _CheckoutHeading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'الخطوة الأخيرة',
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'الخطوة الأخيرة',
+          style: TextStyle(
+            color: StorefrontColors.accent,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: StorefrontSpacing.xs),
+        RichText(
+          text: TextSpan(
+            style: Theme.of(context).textTheme.headlineMedium,
+            children: const [
+              TextSpan(text: 'إتمام الطلب'),
+              TextSpan(
+                text: '.',
+                style: TextStyle(color: accentColor),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: StorefrontSpacing.xs),
+        ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: StorefrontLayout.readingMaxWidth,
+          ),
+          child: const Text(
+            'أدخل بيانات التوصيل، راجع طلبك، ثم أكّد الطلب بأمان عبر واتساب.',
             style: TextStyle(
-              color: StorefrontColors.accent,
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
+              color: StorefrontColors.mutedInk,
+              fontSize: 14,
+              height: 1.6,
             ),
           ),
-          const SizedBox(height: StorefrontSpacing.xs),
-          RichText(
-            text: TextSpan(
-              style: TextStyle(
-                color: inkColor,
-                fontSize: constraints.maxWidth < StorefrontLayout.narrow
-                    ? 30
-                    : 40,
-                height: 1.2,
-                fontWeight: FontWeight.w900,
-              ),
-              children: const [
-                TextSpan(text: 'إتمام الطلب'),
-                TextSpan(
-                  text: '.',
-                  style: TextStyle(color: accentColor),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: StorefrontSpacing.xs),
-          ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: StorefrontLayout.readingMaxWidth,
-            ),
-            child: const Text(
-              'أدخل بيانات التوصيل، راجع طلبك، ثم أكّد الطلب بأمان عبر واتساب.',
-              style: TextStyle(
-                color: StorefrontColors.mutedInk,
-                fontSize: 14,
-                height: 1.6,
-              ),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

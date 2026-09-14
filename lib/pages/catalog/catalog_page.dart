@@ -7,35 +7,34 @@ import '../../data/models/product.dart';
 import '../../features/cart/cart_state.dart';
 import '../../widgets/catalog_widgets.dart';
 import '../cart/cart_page.dart';
+import 'storefront_audience.dart';
 
 class CollectionsPage extends CatalogPage {
   const CollectionsPage({required super.store, super.key})
-    : super(title: 'الكل', genderFilter: null);
+    : super(audience: StorefrontAudience.all);
 }
 
 class MenPage extends CatalogPage {
   const MenPage({required super.store, super.key})
-    : super(title: 'الرجال', genderFilter: 'رجال');
+    : super(audience: StorefrontAudience.men);
 }
 
 class WomenPage extends CatalogPage {
   const WomenPage({required super.store, super.key})
-    : super(title: 'النساء', genderFilter: 'نساء');
+    : super(audience: StorefrontAudience.women);
 }
 
 class CatalogPage extends StatefulWidget {
-  const CatalogPage({
-    required this.store,
-    required this.title,
-    required this.genderFilter,
-    super.key,
-  });
+  const CatalogPage({required this.store, required this.audience, super.key});
 
   final StoreState store;
-  final String title;
-  final String? genderFilter;
+  final StorefrontAudience audience;
 
   static const allCategory = 'الكل';
+
+  String get title => audience.label;
+
+  String? get genderFilter => audience.productGender;
 
   @override
   State<CatalogPage> createState() => _CatalogPageState();
@@ -151,7 +150,13 @@ class _CatalogPageState extends State<CatalogPage> {
     );
   }
 
-  void openPage(Widget page) {
+  void _selectAudience(StorefrontAudience audience) {
+    if (audience == widget.audience) return;
+    final page = switch (audience) {
+      StorefrontAudience.all => CollectionsPage(store: widget.store),
+      StorefrontAudience.men => MenPage(store: widget.store),
+      StorefrontAudience.women => WomenPage(store: widget.store),
+    };
     Navigator.of(
       context,
     ).pushReplacement(MaterialPageRoute<void>(builder: (_) => page));
@@ -170,12 +175,8 @@ class _CatalogPageState extends State<CatalogPage> {
                 const DeliveryBanner(),
                 StoreHeader(
                   store: widget.store,
-                  activeSection: widget.title,
-                  onMenPressed: () => openPage(MenPage(store: widget.store)),
-                  onWomenPressed: () =>
-                      openPage(WomenPage(store: widget.store)),
-                  onAllPressed: () =>
-                      openPage(CollectionsPage(store: widget.store)),
+                  activeAudience: widget.audience,
+                  onAudienceChanged: _selectAudience,
                   onCartPressed: openCart,
                 ),
                 Expanded(
@@ -184,9 +185,6 @@ class _CatalogPageState extends State<CatalogPage> {
                       final horizontalPadding = StorefrontLayout.gutterFor(
                         constraints.maxWidth,
                       );
-                      final shortMobileViewport =
-                          constraints.maxWidth < 600 &&
-                          constraints.maxHeight < 520;
                       final content = ConstrainedBox(
                         constraints: const BoxConstraints(
                           maxWidth: StorefrontLayout.contentMaxWidth,
@@ -194,12 +192,14 @@ class _CatalogPageState extends State<CatalogPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            PageIntro(
-                              title: widget.title,
-                              heroProducts: visibleProducts,
-                              onShopPressed: _scrollToCatalog,
-                            ),
-                            const SizedBox(height: StorefrontSpacing.xxl),
+                            if (widget.audience == StorefrontAudience.all) ...[
+                              PageIntro(
+                                title: widget.title,
+                                heroProducts: visibleProducts,
+                                onShopPressed: _scrollToCatalog,
+                              ),
+                              const SizedBox(height: StorefrontSpacing.lg),
+                            ],
                             CatalogSectionHeading(
                               key: _catalogSectionKey,
                               title: widget.title,
@@ -216,69 +216,65 @@ class _CatalogPageState extends State<CatalogPage> {
                           ],
                         ),
                       );
-                      return Padding(
-                        padding: EdgeInsets.only(
-                          top: shortMobileViewport
-                              ? StorefrontSpacing.xs
-                              : StorefrontSpacing.xl,
-                          bottom: StorefrontSpacing.section,
-                        ),
-                        child: CustomScrollView(
-                          slivers: [
-                            SliverToBoxAdapter(
-                              child: Center(
+                      const scrollTopSpacing = 6.0;
+                      return CustomScrollView(
+                        key: const ValueKey('catalog-scroll-view'),
+                        slivers: [
+                          SliverToBoxAdapter(
+                            child: SizedBox(height: scrollTopSpacing),
+                          ),
+                          SliverToBoxAdapter(
+                            child: Center(
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: horizontalPadding,
+                                ),
+                                child: content,
+                              ),
+                            ),
+                          ),
+                          const SliverToBoxAdapter(
+                            child: SizedBox(height: StorefrontSpacing.lg),
+                          ),
+                          SliverToBoxAdapter(
+                            child: Center(
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  maxWidth: StorefrontLayout.contentMaxWidth,
+                                ),
                                 child: Padding(
                                   padding: EdgeInsets.symmetric(
                                     horizontal: horizontalPadding,
                                   ),
-                                  child: content,
-                                ),
-                              ),
-                            ),
-                            const SliverToBoxAdapter(
-                              child: SizedBox(height: StorefrontSpacing.lg),
-                            ),
-                            SliverToBoxAdapter(
-                              child: Center(
-                                child: ConstrainedBox(
-                                  constraints: const BoxConstraints(
-                                    maxWidth: StorefrontLayout.contentMaxWidth,
-                                  ),
-                                  child: Padding(
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: horizontalPadding,
-                                    ),
-                                    child: AnimatedBuilder(
-                                      animation: widget.store,
-                                      builder: (context, _) => CatalogResults(
-                                        isLoading: widget.store.isLoading,
-                                        error: widget.store.loadError,
-                                        products: visibleProducts,
-                                        store: widget.store,
-                                        hasActiveFilter:
-                                            query.trim().isNotEmpty ||
-                                            selectedCategory !=
-                                                CatalogPage.allCategory,
-                                        onRetry: widget.store.loadCatalog,
-                                        onSearchPressed: _focusSearch,
-                                      ),
+                                  child: AnimatedBuilder(
+                                    animation: widget.store,
+                                    builder: (context, _) => CatalogResults(
+                                      isLoading: widget.store.isLoading,
+                                      error: widget.store.loadError,
+                                      products: visibleProducts,
+                                      store: widget.store,
+                                      hasActiveFilter:
+                                          query.trim().isNotEmpty ||
+                                          selectedCategory !=
+                                              CatalogPage.allCategory,
+                                      onRetry: widget.store.loadCatalog,
+                                      onSearchPressed: _focusSearch,
                                     ),
                                   ),
                                 ),
                               ),
                             ),
-                            const SliverToBoxAdapter(
-                              child: SizedBox(height: 20),
-                            ),
-                            const SliverToBoxAdapter(child: TrustStrip()),
-                            const SliverToBoxAdapter(
-                              child: SizedBox(
-                                height: StorefrontSpacing.section,
-                              ),
-                            ),
-                            const SliverToBoxAdapter(child: StoreFooter()),
-                          ],
-                        ),
+                          ),
+                          const SliverToBoxAdapter(child: SizedBox(height: 20)),
+                          const SliverToBoxAdapter(child: TrustStrip()),
+                          const SliverToBoxAdapter(
+                            child: SizedBox(height: StorefrontSpacing.section),
+                          ),
+                          const SliverToBoxAdapter(child: StoreFooter()),
+                          const SliverToBoxAdapter(
+                            child: SizedBox(height: StorefrontSpacing.section),
+                          ),
+                        ],
                       );
                     },
                   ),

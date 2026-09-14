@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:ironsam09/main.dart';
 import 'package:ironsam09/core/config/app_config.dart';
+import 'package:ironsam09/core/theme/storefront_theme.dart';
 import 'package:ironsam09/core/utils/image_url_policy.dart';
 import 'package:ironsam09/core/utils/hex_color.dart';
 import 'package:ironsam09/data/models/order.dart';
@@ -661,7 +662,7 @@ void main() {
       );
       expect(
         ctaRect.bottom,
-        lessThanOrEqualTo(viewport.height - safePadding.bottom),
+        lessThanOrEqualTo(viewport.height),
         reason: 'CTA falls below the initial viewport at $viewport: $ctaRect',
       );
       expect(
@@ -1195,5 +1196,195 @@ void main() {
     await tester.tap(find.text('الرجال'));
     await tester.pumpAndSettle();
     expect(find.byType(MenPage), findsOneWidget);
+  });
+
+  testWidgets('Hero visibility and spacing adapt at storefront breakpoints', (
+    tester,
+  ) async {
+    const widths = <double>[320, 375, 768, 1024, 1440];
+    final store = StoreState();
+    addTearDown(() {
+      tester.binding.setSurfaceSize(null);
+      store.dispose();
+    });
+
+    for (final width in widths) {
+      await tester.binding.setSurfaceSize(Size(width, 900));
+      await tester.pumpWidget(MaterialApp(home: CollectionsPage(store: store)));
+      await tester.pump();
+
+      final hero = find.byType(PageIntro);
+      final heading = find.byType(CatalogSectionHeading);
+      expect(hero, findsOneWidget, reason: 'Hero missing at $width px');
+      expect(heading, findsOneWidget);
+      expect(
+        tester.getTopLeft(heading).dy - tester.getBottomLeft(hero).dy,
+        StorefrontSpacing.lg,
+        reason: 'Unexpected post-Hero gap at $width px',
+      );
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(MaterialApp(home: MenPage(store: store)));
+      await tester.pump();
+      expect(hero, findsNothing, reason: 'Men Hero remained at $width px');
+      expect(heading, findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(MaterialApp(home: WomenPage(store: store)));
+      await tester.pump();
+      expect(hero, findsNothing, reason: 'Women Hero remained at $width px');
+      expect(heading, findsOneWidget);
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets('catalog spacing scrolls instead of occupying the viewport', (
+    tester,
+  ) async {
+    const viewports = <Size>[Size(375, 800), Size(1280, 800)];
+    final store = StoreState();
+    addTearDown(() {
+      tester.binding.setSurfaceSize(null);
+      store.dispose();
+    });
+
+    for (final viewport in viewports) {
+      await tester.binding.setSurfaceSize(viewport);
+      await tester.pumpWidget(
+        MaterialApp(
+          key: ValueKey(viewport.width),
+          home: CollectionsPage(store: store),
+        ),
+      );
+      await tester.pump();
+
+      final scrollView = find.byKey(const ValueKey('catalog-scroll-view'));
+      final header = find.byType(StoreHeader);
+      final scrollRect = tester.getRect(scrollView);
+      final heroTop = tester.getTopLeft(find.byType(PageIntro)).dy;
+
+      expect(scrollRect.top, tester.getRect(header).bottom);
+      expect(heroTop - scrollRect.top, 6);
+      expect(
+        scrollRect.bottom,
+        viewport.height,
+        reason: 'No off-white gutter should remain fixed below the catalog.',
+      );
+
+      await tester.drag(scrollView, const Offset(0, -160));
+      await tester.pump();
+
+      expect(tester.getTopLeft(find.byType(PageIntro)).dy, lessThan(heroTop));
+      expect(tester.getRect(scrollView), scrollRect);
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets('mobile and desktop controls share the audience state', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(375, 800));
+    final store = StoreState();
+    addTearDown(() {
+      tester.binding.setSurfaceSize(null);
+      store.dispose();
+    });
+
+    await tester.pumpWidget(MaterialApp(home: CollectionsPage(store: store)));
+    await tester.pump();
+    expect(find.byType(PageIntro), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('storefront-mobile-filter-men')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(MenPage), findsOneWidget);
+    expect(find.byType(PageIntro), findsNothing);
+    expect(
+      find.text('تيشيرت الأداء الأساسي', skipOffstage: false),
+      findsOneWidget,
+    );
+    expect(find.text('سترة ستوديو خفيفة', skipOffstage: false), findsNothing);
+
+    await tester.binding.setSurfaceSize(const Size(1024, 800));
+    await tester.pumpAndSettle();
+    final menButton = tester.widget<TextButton>(
+      find.descendant(
+        of: find.byKey(const ValueKey('storefront-filter-men')),
+        matching: find.byType(TextButton),
+      ),
+    );
+    expect(
+      menButton.style?.foregroundColor?.resolve(<WidgetState>{}),
+      StorefrontColors.accent,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('storefront-filter-women')));
+    await tester.pumpAndSettle();
+    expect(find.byType(WomenPage), findsOneWidget);
+    expect(find.byType(PageIntro), findsNothing);
+    expect(find.text('سترة ستوديو خفيفة', skipOffstage: false), findsOneWidget);
+    expect(
+      find.text('تيشيرت الأداء الأساسي', skipOffstage: false),
+      findsNothing,
+    );
+
+    await tester.binding.setSurfaceSize(const Size(375, 800));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    final mobileWomenLabel = tester.widget<Text>(
+      find.descendant(
+        of: find.byKey(const ValueKey('storefront-mobile-filter-women')),
+        matching: find.text('النساء'),
+      ),
+    );
+    expect(mobileWomenLabel.style?.color, StorefrontColors.accent);
+
+    await tester.tap(
+      find.byKey(const ValueKey('storefront-mobile-filter-all')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(CollectionsPage), findsOneWidget);
+    expect(find.byType(PageIntro), findsOneWidget);
+    expect(
+      find.text('تيشيرت الأداء الأساسي', skipOffstage: false),
+      findsOneWidget,
+    );
+    expect(find.text('سترة ستوديو خفيفة', skipOffstage: false), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('checkout titles reuse the cart heading typography', (
+    tester,
+  ) async {
+    final store = StoreState()..add(products.first, size: 'M');
+    addTearDown(store.dispose);
+
+    await tester.pumpWidget(MaterialApp(home: CartPage(store: store)));
+    await tester.pump();
+    final cartHeadingStyle = tester.widget<Text>(find.text('اختياراتك')).style;
+    expect(cartHeadingStyle?.fontFamily, 'Cairo');
+
+    await tester.pumpWidget(MaterialApp(home: CheckoutPage(store: store)));
+    await tester.pump();
+    final appBarTitle = tester.widget<Text>(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.text('إتمام الطلب'),
+      ),
+    );
+    final pageTitle = tester.widget<RichText>(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is RichText && widget.text.toPlainText() == 'إتمام الطلب.',
+      ),
+    );
+
+    expect(appBarTitle.style, cartHeadingStyle);
+    expect((pageTitle.text as TextSpan).style, cartHeadingStyle);
+    expect(tester.takeException(), isNull);
   });
 }

@@ -9,6 +9,7 @@ import '../core/utils/image_url_policy.dart';
 import '../../data/models/product.dart';
 import '../../features/cart/cart_state.dart';
 import '../pages/catalog/product_details_page.dart';
+import '../pages/catalog/storefront_audience.dart';
 import 'safe_product_image.dart';
 
 class HeroImageSource {
@@ -99,19 +100,15 @@ class DeliveryBanner extends StatelessWidget {
 class StoreHeader extends StatelessWidget {
   const StoreHeader({
     required this.store,
-    required this.activeSection,
-    required this.onMenPressed,
-    required this.onWomenPressed,
-    required this.onAllPressed,
+    required this.activeAudience,
+    required this.onAudienceChanged,
     required this.onCartPressed,
     super.key,
   });
 
   final StoreState store;
-  final String activeSection;
-  final VoidCallback onMenPressed;
-  final VoidCallback onWomenPressed;
-  final VoidCallback onAllPressed;
+  final StorefrontAudience activeAudience;
+  final ValueChanged<StorefrontAudience> onAudienceChanged;
   final VoidCallback onCartPressed;
 
   @override
@@ -156,21 +153,27 @@ class StoreHeader extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         _HeaderLink(
-                          label: 'الرجال',
-                          active: activeSection == 'الرجال',
-                          onPressed: onMenPressed,
+                          key: const ValueKey('storefront-filter-men'),
+                          label: StorefrontAudience.men.label,
+                          active: activeAudience == StorefrontAudience.men,
+                          onPressed: () =>
+                              onAudienceChanged(StorefrontAudience.men),
                         ),
                         SizedBox(width: StorefrontSpacing.md),
                         _HeaderLink(
-                          label: 'النساء',
-                          active: activeSection == 'النساء',
-                          onPressed: onWomenPressed,
+                          key: const ValueKey('storefront-filter-women'),
+                          label: StorefrontAudience.women.label,
+                          active: activeAudience == StorefrontAudience.women,
+                          onPressed: () =>
+                              onAudienceChanged(StorefrontAudience.women),
                         ),
                         SizedBox(width: StorefrontSpacing.md),
                         _HeaderLink(
-                          label: 'الكل',
-                          active: activeSection == 'الكل',
-                          onPressed: onAllPressed,
+                          key: const ValueKey('storefront-filter-all'),
+                          label: StorefrontAudience.all.label,
+                          active: activeAudience == StorefrontAudience.all,
+                          onPressed: () =>
+                              onAudienceChanged(StorefrontAudience.all),
                         ),
                       ],
                     ),
@@ -279,19 +282,26 @@ class StoreHeader extends StatelessWidget {
                   ),
                   const Divider(color: lineColor),
                   _MobileMenuItem(
-                    label: 'الكل',
-                    active: activeSection == 'الكل',
-                    onTap: () => select(onAllPressed),
+                    key: const ValueKey('storefront-mobile-filter-all'),
+                    label: StorefrontAudience.all.label,
+                    active: activeAudience == StorefrontAudience.all,
+                    onTap: () =>
+                        select(() => onAudienceChanged(StorefrontAudience.all)),
                   ),
                   _MobileMenuItem(
-                    label: 'الرجال',
-                    active: activeSection == 'الرجال',
-                    onTap: () => select(onMenPressed),
+                    key: const ValueKey('storefront-mobile-filter-men'),
+                    label: StorefrontAudience.men.label,
+                    active: activeAudience == StorefrontAudience.men,
+                    onTap: () =>
+                        select(() => onAudienceChanged(StorefrontAudience.men)),
                   ),
                   _MobileMenuItem(
-                    label: 'النساء',
-                    active: activeSection == 'النساء',
-                    onTap: () => select(onWomenPressed),
+                    key: const ValueKey('storefront-mobile-filter-women'),
+                    label: StorefrontAudience.women.label,
+                    active: activeAudience == StorefrontAudience.women,
+                    onTap: () => select(
+                      () => onAudienceChanged(StorefrontAudience.women),
+                    ),
                   ),
                   _MobileMenuItem(
                     label: 'سلة التسوق',
@@ -312,6 +322,7 @@ class _MobileMenuItem extends StatelessWidget {
     required this.label,
     required this.onTap,
     this.active = false,
+    super.key,
   });
 
   final String label;
@@ -323,6 +334,8 @@ class _MobileMenuItem extends StatelessWidget {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       onTap: onTap,
+      selected: active,
+      selectedColor: accentColor,
       title: Text(
         label,
         style: TextStyle(
@@ -344,6 +357,7 @@ class _HeaderLink extends StatelessWidget {
     required this.label,
     required this.onPressed,
     this.active = false,
+    super.key,
   });
 
   final String label;
@@ -352,31 +366,34 @@ class _HeaderLink extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextButton(
-      onPressed: onPressed,
-      style: TextButton.styleFrom(
-        foregroundColor: active ? accentColor : inkColor,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        minimumSize: const Size(48, 48),
-        textStyle: const TextStyle(
-          fontFamily: cairoFontFamily,
-          fontSize: 14,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-      child: AnimatedContainer(
-        duration: StorefrontMotion.fast,
-        curve: StorefrontMotion.curve,
-        padding: const EdgeInsets.only(bottom: 4),
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(
-              color: active ? accentColor : Colors.transparent,
-              width: 2,
-            ),
+    return Semantics(
+      selected: active,
+      child: TextButton(
+        onPressed: onPressed,
+        style: TextButton.styleFrom(
+          foregroundColor: active ? accentColor : inkColor,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          minimumSize: const Size(48, 48),
+          textStyle: const TextStyle(
+            fontFamily: cairoFontFamily,
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
           ),
         ),
-        child: Text(label),
+        child: AnimatedContainer(
+          duration: StorefrontMotion.resolve(context, StorefrontMotion.fast),
+          curve: StorefrontMotion.curve,
+          padding: const EdgeInsets.only(bottom: 4),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: active ? accentColor : Colors.transparent,
+                width: 2,
+              ),
+            ),
+          ),
+          child: Text(label),
+        ),
       ),
     );
   }
