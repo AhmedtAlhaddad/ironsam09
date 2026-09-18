@@ -1,0 +1,8 @@
+{
+  "name": "lively-river-31e4",
+  "compatibility_date": "2026-09-11",
+  "assets": {
+    "directory": "./build/web",
+    "not_found_handling": "single-page-application"
+  }
+}
