@@ -259,6 +259,80 @@ class AdminStatusBadge extends StatelessWidget {
 
 enum AdminStatusTone { good, warning, danger, neutral }
 
+class AdminVariantStockRow extends StatelessWidget {
+  const AdminVariantStockRow({
+    required this.sizeLabel,
+    required this.value,
+    required this.onChanged,
+    required this.onRemove,
+    this.statusLabel,
+    this.statusTone = AdminStatusTone.neutral,
+    this.sizeLabelKey,
+    super.key,
+  });
+
+  final String sizeLabel;
+  final int value;
+  final ValueChanged<int> onChanged;
+  final VoidCallback onRemove;
+  final String? statusLabel;
+  final AdminStatusTone statusTone;
+  final Key? sizeLabelKey;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final narrow = constraints.maxWidth < 430;
+      final label = Text(
+        narrow ? 'المقاس: $sizeLabel' : sizeLabel,
+        key: sizeLabelKey,
+        textDirection: TextDirection.ltr,
+        style: const TextStyle(fontWeight: FontWeight.w900),
+      );
+      final status = statusLabel == null
+          ? null
+          : AdminStatusBadge(label: statusLabel!, tone: statusTone);
+      final controls = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          StockStepper(value: value, compact: true, onChanged: onChanged),
+          const SizedBox(width: 4),
+          IconButton(
+            tooltip: 'إزالة المقاس',
+            onPressed: onRemove,
+            icon: const Icon(Icons.close, color: AdminColors.danger),
+          ),
+        ],
+      );
+
+      if (narrow) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(child: label),
+                ?status,
+              ],
+            ),
+            const SizedBox(height: 6),
+            Align(alignment: AlignmentDirectional.centerEnd, child: controls),
+          ],
+        );
+      }
+
+      return Row(
+        children: [
+          SizedBox(width: 48, child: label),
+          ?status,
+          const Spacer(),
+          controls,
+        ],
+      );
+    },
+  );
+}
+
 class StockStepper extends StatelessWidget {
   const StockStepper({
     required this.value,
@@ -272,7 +346,7 @@ class StockStepper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final size = compact ? 34.0 : 42.0;
+    final size = compact ? 44.0 : 48.0;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [

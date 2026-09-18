@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../core/utils/image_url_policy.dart';
@@ -5,8 +6,10 @@ import '../core/utils/image_url_policy.dart';
 class SafeProductImage extends StatelessWidget {
   const SafeProductImage({
     required this.url,
+    this.fallbackUrl,
     this.fit = BoxFit.cover,
     this.cacheWidth,
+    this.cacheHeight,
     this.filterQuality = FilterQuality.low,
     this.color,
     this.colorBlendMode,
@@ -18,8 +21,10 @@ class SafeProductImage extends StatelessWidget {
   });
 
   final String? url;
+  final String? fallbackUrl;
   final BoxFit fit;
   final int? cacheWidth;
+  final int? cacheHeight;
   final FilterQuality filterQuality;
   final Color? color;
   final BlendMode? colorBlendMode;
@@ -42,19 +47,33 @@ class SafeProductImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final safeUrl = safeProductImageUrl(url);
-    if (safeUrl == null) return _fallback;
+    final safeFallbackUrl = safeProductImageUrl(fallbackUrl);
+    if (safeUrl == null) {
+      return safeFallbackUrl == null
+          ? _fallback
+          : _networkImage(safeFallbackUrl);
+    }
 
+    return _networkImage(
+      safeUrl,
+      fallbackUrl: safeFallbackUrl == safeUrl ? null : safeFallbackUrl,
+    );
+  }
+
+  Widget _networkImage(String safeUrl, {String? fallbackUrl}) {
     return Image.network(
       safeUrl,
       fit: fit,
-      cacheWidth: cacheWidth,
+      cacheWidth: kIsWeb ? null : cacheWidth,
+      cacheHeight: kIsWeb ? null : cacheHeight,
       filterQuality: filterQuality,
       color: color,
       colorBlendMode: colorBlendMode,
       width: width,
       height: height,
       semanticLabel: semanticLabel,
-      errorBuilder: (_, _, _) => _fallback,
+      errorBuilder: (_, _, _) =>
+          fallbackUrl == null ? _fallback : _networkImage(fallbackUrl),
     );
   }
 }

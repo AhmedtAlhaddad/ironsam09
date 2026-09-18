@@ -1,8 +1,36 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:typed_data';
+
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../core/utils/product_image_paths.dart';
+import 'product_thumbnail_generator.dart';
 
 class DuplicateDiscountCodeException implements Exception {
   const DuplicateDiscountCodeException();
+}
+
+class ProductHasActiveOrdersException implements Exception {
+  const ProductHasActiveOrdersException();
+}
+
+class ProductDeleteResult {
+  const ProductDeleteResult({required this.storageCleanupSucceeded});
+
+  final bool storageCleanupSucceeded;
+}
+
+class ThumbnailBackfillResult {
+  const ThumbnailBackfillResult({
+    required this.total,
+    required this.created,
+    required this.skipped,
+    required this.failed,
+  });
+
+  final int total;
+  final int created;
+  final int skipped;
+  final int failed;
 }
 
 abstract interface class AdminDiscountCodesService {
@@ -590,33 +618,214 @@ class AdminService
     final safeName = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
     final path =
         '$productId/${DateTime.now().microsecondsSinceEpoch}_$safeName';
-    await client.storage
-        .from('product-images')
-        .uploadBinary(
-          path,
-          bytes,
-          fileOptions: const FileOptions(upsert: true),
-        );
-    final url = client.storage.from('product-images').getPublicUrl(path);
-    if (cover) {
-      await client
-          .from('product_images')
-          .update({'is_cover': false})
-          .eq('product_id', productId);
+    final thumbnailPath = productThumbnailStoragePath(
+      productId: productId,
+      originalStoragePath: path,
+    );
+    final heroPath = productHeroStoragePath(
+      productId: productId,
+      originalStoragePath: path,
+    );
+    final thumbnailBytes = await generateProductThumbnail(bytes);
+    final heroBytes = await generateProductHeroImage(bytes);
+    final storage = client.storage.from(productImagesBucket);
+    final uploadedPaths = <String>[];
+    try {
+      await storage.uploadBinary(
+        path,
+        bytes,
+        fileOptions: const FileOptions(upsert: true),
+      );
+      uploadedPaths.add(path);
+      await storage.uploadBinary(
+        thumbnailPath,
+        thumbnailBytes,
+        fileOptions: const FileOptions(
+          upsert: true,
+          contentType: 'image/webp',
+          cacheControl: '31536000',
+        ),
+      );
+      uploadedPaths.add(thumbnailPath);
+      await storage.uploadBinary(
+        heroPath,
+        heroBytes,
+        fileOptions: const FileOptions(
+          upsert: true,
+          contentType: 'image/webp',
+          cacheControl: '31536000',
+        ),
+      );
+      uploadedPaths.add(heroPath);
+      final url = storage.getPublicUrl(path);
+      if (cover) {
+        await client
+            .from('product_images')
+            .update({'is_cover': false})
+            .eq('product_id', productId);
+      }
+      await client.from('product_images').insert({
+        'product_id': productId,
+        'color_id': colorId,
+        'storage_path': path,
+        'url': url,
+        'sort_order': sortOrder,
+        'is_cover': cover,
+      });
+    } catch (_) {
+      if (uploadedPaths.isNotEmpty) {
+        try {
+          await storage.remove(uploadedPaths);
+        } catch (_) {
+          // Preserve the upload error; orphan cleanup can be retried manually.
+        }
+      }
+      rethrow;
     }
-    await client.from('product_images').insert({
-      'product_id': productId,
-      'color_id': colorId,
-      'storage_path': path,
-      'url': url,
-      'sort_order': sortOrder,
-      'is_cover': cover,
-    });
   }
 
-  Future<void> removeProductImage(String imageId, String storagePath) async {
-    await client.storage.from('product-images').remove([storagePath]);
+  Future<void> removeProductImage(
+    String imageId,
+    String storagePath, {
+    required String productId,
+  }) async {
+    final thumbnailPath = productThumbnailStoragePath(
+      productId: productId,
+      originalStoragePath: storagePath,
+    );
+    final heroPath = productHeroStoragePath(
+      productId: productId,
+      originalStoragePath: storagePath,
+    );
+    await client.storage.from(productImagesBucket).remove([
+      storagePath,
+      thumbnailPath,
+      heroPath,
+    ]);
     await client.from('product_images').delete().eq('id', imageId);
+  }
+
+  Future<ThumbnailBackfillResult> backfillProductImageThumbnails({
+    void Function(int completed, int total)? onProgress,
+  }) async {
+    final rows = _maps(
+      await client
+          .from('product_images')
+          .select('id, product_id, storage_path')
+          .order('product_id'),
+    );
+    final storage = client.storage.from(productImagesBucket);
+    final existingThumbnailsByProduct = <String, Set<String>>{};
+    final existingHeroImagesByProduct = <String, Set<String>>{};
+    var created = 0;
+    var skipped = 0;
+    var failed = 0;
+    var completed = 0;
+
+    for (final row in rows) {
+      final productId = row['product_id'] as String?;
+      final storagePath = row['storage_path'] as String?;
+      if (productId == null ||
+          productId.isEmpty ||
+          storagePath == null ||
+          storagePath.isEmpty) {
+        failed++;
+        completed++;
+        onProgress?.call(completed, rows.length);
+        continue;
+      }
+
+      try {
+        final existingThumbnailNames = await _variantNamesForProduct(
+          storage,
+          productId,
+          'thumbs',
+          existingThumbnailsByProduct,
+        );
+        final thumbnailPath = productThumbnailStoragePath(
+          productId: productId,
+          originalStoragePath: storagePath,
+        );
+        final thumbnailName = thumbnailPath.split('/').last;
+        final existingHeroNames = await _variantNamesForProduct(
+          storage,
+          productId,
+          'hero',
+          existingHeroImagesByProduct,
+        );
+        final heroPath = productHeroStoragePath(
+          productId: productId,
+          originalStoragePath: storagePath,
+        );
+        final heroName = heroPath.split('/').last;
+        final thumbnailExists = existingThumbnailNames.contains(thumbnailName);
+        final heroExists = existingHeroNames.contains(heroName);
+        if (thumbnailExists && heroExists) {
+          skipped++;
+        } else {
+          final sourceBytes = await storage.download(storagePath);
+          if (!thumbnailExists) {
+            final thumbnailBytes = await generateProductThumbnail(sourceBytes);
+            await storage.uploadBinary(
+              thumbnailPath,
+              thumbnailBytes,
+              fileOptions: const FileOptions(
+                contentType: 'image/webp',
+                cacheControl: '31536000',
+              ),
+            );
+            existingThumbnailNames.add(thumbnailName);
+          }
+          if (!heroExists) {
+            final heroBytes = await generateProductHeroImage(sourceBytes);
+            await storage.uploadBinary(
+              heroPath,
+              heroBytes,
+              fileOptions: const FileOptions(
+                contentType: 'image/webp',
+                cacheControl: '31536000',
+              ),
+            );
+            existingHeroNames.add(heroName);
+          }
+          created++;
+        }
+      } catch (_) {
+        failed++;
+      }
+      completed++;
+      onProgress?.call(completed, rows.length);
+    }
+
+    return ThumbnailBackfillResult(
+      total: rows.length,
+      created: created,
+      skipped: skipped,
+      failed: failed,
+    );
+  }
+
+  Future<Set<String>> _variantNamesForProduct(
+    StorageFileApi storage,
+    String productId,
+    String directory,
+    Map<String, Set<String>> cache,
+  ) async {
+    final cached = cache[productId];
+    if (cached != null) return cached;
+
+    const pageSize = 1000;
+    final names = <String>{};
+    for (var offset = 0; ; offset += pageSize) {
+      final page = await storage.list(
+        path: '$productId/$directory',
+        searchOptions: SearchOptions(limit: pageSize, offset: offset),
+      );
+      names.addAll(page.map((object) => object.name));
+      if (page.length < pageSize) break;
+    }
+    cache[productId] = names;
+    return names;
   }
 
   Future<void> setCoverImage(String imageId, String productId) async {
@@ -638,8 +847,50 @@ class AdminService
   Future<void> setProductActive(String productId, bool active) =>
       client.from('products').update({'active': active}).eq('id', productId);
 
-  Future<void> deleteProduct(String productId) =>
-      client.from('products').delete().eq('id', productId);
+  Future<ProductDeleteResult> deleteProduct(String productId) async {
+    dynamic result;
+    try {
+      result = await client.rpc(
+        'admin_delete_product',
+        params: {'p_product_id': productId},
+      );
+    } on PostgrestException catch (error) {
+      final errorText = '${error.message} ${error.details} ${error.hint}';
+      if (errorText.contains('active_orders_block_product_delete')) {
+        throw const ProductHasActiveOrdersException();
+      }
+      rethrow;
+    }
+
+    final storagePaths = result is List
+        ? result.whereType<String>().where((path) => path.isNotEmpty).toList()
+        : const <String>[];
+    if (storagePaths.isEmpty) {
+      return const ProductDeleteResult(storageCleanupSucceeded: true);
+    }
+
+    try {
+      final allPaths = <String>{...storagePaths};
+      for (final storagePath in storagePaths) {
+        allPaths.add(
+          productThumbnailStoragePath(
+            productId: productId,
+            originalStoragePath: storagePath,
+          ),
+        );
+        allPaths.add(
+          productHeroStoragePath(
+            productId: productId,
+            originalStoragePath: storagePath,
+          ),
+        );
+      }
+      await client.storage.from(productImagesBucket).remove(allPaths.toList());
+      return const ProductDeleteResult(storageCleanupSucceeded: true);
+    } catch (_) {
+      return const ProductDeleteResult(storageCleanupSucceeded: false);
+    }
+  }
 
   @override
   Future<void> updateOrderStatus(String orderId, String status) async {

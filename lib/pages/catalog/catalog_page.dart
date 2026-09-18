@@ -35,10 +35,66 @@ class CatalogPage extends StatefulWidget {
 
   String get title => audience.label;
 
-  String? get genderFilter => audience.productGender;
-
   @override
   State<CatalogPage> createState() => _CatalogPageState();
+}
+
+List<Product> filterCatalogProducts({
+  required Iterable<Product> products,
+  required StorefrontAudience audience,
+  required String selectedCategory,
+  required String query,
+}) {
+  final normalizedQuery = query.trim().toLowerCase();
+  final filtered = products
+      .where((product) {
+        final matchesGender = audience.includesProductGender(product.gender);
+        final matchesCategory =
+            selectedCategory == CatalogPage.allCategory ||
+            product.category == selectedCategory;
+        final matchesQuery =
+            normalizedQuery.isEmpty ||
+            product.name.toLowerCase().contains(normalizedQuery) ||
+            product.category.toLowerCase().contains(normalizedQuery);
+        return matchesGender && matchesCategory && matchesQuery;
+      })
+      .toList(growable: false);
+  return audience == StorefrontAudience.all
+      ? interleaveCatalogProducts(filtered)
+      : filtered;
+}
+
+List<Product> interleaveCatalogProducts(Iterable<Product> products) {
+  final women = <Product>[];
+  final men = <Product>[];
+  final unisex = <Product>[];
+  final unknown = <Product>[];
+  for (final product in products) {
+    switch (product.normalizedGender) {
+      case ProductGender.women:
+        women.add(product);
+      case ProductGender.men:
+        men.add(product);
+      case ProductGender.unisex:
+        unisex.add(product);
+      case null:
+        unknown.add(product);
+    }
+  }
+
+  final result = <Product>[];
+  var womenIndex = 0;
+  var menIndex = 0;
+  var unisexIndex = 0;
+  while (womenIndex < women.length ||
+      menIndex < men.length ||
+      unisexIndex < unisex.length) {
+    if (womenIndex < women.length) result.add(women[womenIndex++]);
+    if (menIndex < men.length) result.add(men[menIndex++]);
+    if (unisexIndex < unisex.length) result.add(unisex[unisexIndex++]);
+  }
+  result.addAll(unknown);
+  return result;
 }
 
 class _CatalogPageState extends State<CatalogPage> {
@@ -95,21 +151,12 @@ class _CatalogPageState extends State<CatalogPage> {
   List<Product> get visibleProducts => _visibleProducts;
 
   List<Product> _filterProducts() {
-    final normalizedQuery = query.trim().toLowerCase();
-    return widget.store.products.where((product) {
-      final matchesGender =
-          widget.genderFilter == null ||
-          product.gender == widget.genderFilter ||
-          product.gender == 'للجنسين';
-      final matchesCategory =
-          selectedCategory == CatalogPage.allCategory ||
-          product.category == selectedCategory;
-      final matchesQuery =
-          normalizedQuery.isEmpty ||
-          product.name.toLowerCase().contains(normalizedQuery) ||
-          product.category.toLowerCase().contains(normalizedQuery);
-      return matchesGender && matchesCategory && matchesQuery;
-    }).toList();
+    return filterCatalogProducts(
+      products: widget.store.products,
+      audience: widget.audience,
+      selectedCategory: selectedCategory,
+      query: query,
+    );
   }
 
   void _onCategoryChanged(String category) {
@@ -214,6 +261,14 @@ class _CatalogPageState extends State<CatalogPage> {
                       final horizontalPadding = StorefrontLayout.gutterFor(
                         constraints.maxWidth,
                       );
+                      final constrainedContentWidth =
+                          constraints.maxWidth >
+                              StorefrontLayout.contentMaxWidth
+                          ? StorefrontLayout.contentMaxWidth
+                          : constraints.maxWidth;
+                      final catalogHorizontalPadding =
+                          horizontalPadding +
+                          (constraints.maxWidth - constrainedContentWidth) / 2;
                       final content = ConstrainedBox(
                         constraints: const BoxConstraints(
                           maxWidth: StorefrontLayout.contentMaxWidth,
@@ -265,33 +320,19 @@ class _CatalogPageState extends State<CatalogPage> {
                           const SliverToBoxAdapter(
                             child: SizedBox(height: StorefrontSpacing.lg),
                           ),
-                          SliverToBoxAdapter(
-                            child: Center(
-                              child: ConstrainedBox(
-                                constraints: const BoxConstraints(
-                                  maxWidth: StorefrontLayout.contentMaxWidth,
-                                ),
-                                child: Padding(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: horizontalPadding,
-                                  ),
-                                  child: AnimatedBuilder(
-                                    animation: widget.store,
-                                    builder: (context, _) => CatalogResults(
-                                      isLoading: widget.store.isLoading,
-                                      error: widget.store.loadError,
-                                      products: visibleProducts,
-                                      store: widget.store,
-                                      hasActiveFilter:
-                                          query.trim().isNotEmpty ||
-                                          selectedCategory !=
-                                              CatalogPage.allCategory,
-                                      onRetry: widget.store.loadCatalog,
-                                      onSearchPressed: _focusSearch,
-                                    ),
-                                  ),
-                                ),
-                              ),
+                          AnimatedBuilder(
+                            animation: widget.store,
+                            builder: (context, _) => CatalogResults(
+                              isLoading: widget.store.isLoading,
+                              error: widget.store.loadError,
+                              products: visibleProducts,
+                              store: widget.store,
+                              hasActiveFilter:
+                                  query.trim().isNotEmpty ||
+                                  selectedCategory != CatalogPage.allCategory,
+                              onRetry: widget.store.loadCatalog,
+                              onSearchPressed: _focusSearch,
+                              horizontalPadding: catalogHorizontalPadding,
                             ),
                           ),
                           const SliverToBoxAdapter(child: SizedBox(height: 20)),

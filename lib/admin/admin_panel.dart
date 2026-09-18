@@ -17,6 +17,9 @@ const accentColor = AdminColors.accent;
 const adminDiscountRefreshFailureMessage =
     'تم تنفيذ العملية، لكن تعذر تحديث القائمة. حاول إعادة التحميل.';
 const adminDiscountWriteFailureMessage = 'تعذر تنفيذ العملية.';
+const _temporaryProductImageBackfillEnabled = bool.fromEnvironment(
+  'ENABLE_PRODUCT_IMAGE_BACKFILL',
+);
 
 class AdminPanel extends StatefulWidget {
   const AdminPanel({required this.store, required this.service, super.key});
@@ -730,6 +733,9 @@ class _Products extends StatefulWidget {
 class _ProductsState extends State<_Products> {
   String query = '';
   String filter = 'all';
+  bool _backfillingProductImages = false;
+  int _backfillCompleted = 0;
+  int _backfillTotal = 0;
   late Future<List<Map<String, dynamic>>> _productsFuture;
 
   @override
@@ -738,112 +744,178 @@ class _ProductsState extends State<_Products> {
     _productsFuture = widget.service.products();
   }
 
+  Future<void> _refreshProductsAfterDelete() async {
+    final nextProducts = widget.service.products();
+    setState(() => _productsFuture = nextProducts);
+    await nextProducts;
+  }
+
+  Future<void> _runTemporaryProductImageBackfill() async {
+    final confirmed = await confirmAdminAction(
+      context,
+      title: 'إنشاء مشتقات صور المنتجات',
+      message:
+          'سيتم إنشاء ملفات WebP المصغرة وملفات Hero المفقودة فقط. قد تستغرق العملية عدة دقائق.',
+      confirmLabel: 'بدء العملية',
+    );
+    if (!confirmed || !mounted) return;
+
+    setState(() {
+      _backfillingProductImages = true;
+      _backfillCompleted = 0;
+      _backfillTotal = 0;
+    });
+    try {
+      final result = await widget.service.backfillProductImageThumbnails(
+        onProgress: (completed, total) {
+          if (!mounted) return;
+          setState(() {
+            _backfillCompleted = completed;
+            _backfillTotal = total;
+          });
+        },
+      );
+      if (!mounted) return;
+      showAdminMessage(
+        context,
+        'اكتملت العملية: ${result.created} تم إنشاؤها، ${result.skipped} موجودة مسبقًا، ${result.failed} تعذّر إنشاؤها.',
+        error: result.failed > 0,
+      );
+    } catch (_) {
+      if (mounted) {
+        showAdminMessage(
+          context,
+          'تعذّر إكمال إنشاء مشتقات الصور.',
+          error: true,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _backfillingProductImages = false);
+    }
+  }
+
   @override
-  Widget build(BuildContext context) =>
-      FutureBuilder<List<Map<String, dynamic>>>(
-        future: _productsFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return const _ErrorState(message: 'تعذر تحميل المنتجات.');
-          }
-          final rows = snapshot.data!.where(_matches).toList();
-          return _AdminContent(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+  Widget build(
+    BuildContext context,
+  ) => FutureBuilder<List<Map<String, dynamic>>>(
+    future: _productsFuture,
+    builder: (context, snapshot) {
+      if (snapshot.connectionState != ConnectionState.done) {
+        return const Center(child: CircularProgressIndicator());
+      }
+      if (snapshot.hasError) {
+        return const _ErrorState(message: 'تعذر تحميل المنتجات.');
+      }
+      final rows = snapshot.data!.where(_matches).toList();
+      return _AdminContent(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
               children: [
-                Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        'المنتجات',
-                        style: TextStyle(
-                          fontSize: 30,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                    FilledButton.icon(
-                      onPressed: () => _edit(),
-                      icon: const Icon(Icons.add),
-                      label: const Text('إضافة منتج'),
-                    ),
-                  ],
+                const Expanded(
+                  child: Text(
+                    'المنتجات',
+                    style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900),
+                  ),
                 ),
-                const SizedBox(height: 18),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    SizedBox(
-                      width: 310,
-                      child: TextField(
-                        textDirection: TextDirection.rtl,
-                        textAlign: TextAlign.right,
-                        onChanged: (value) => setState(() => query = value),
-                        decoration: adminRtlInputDecoration(
-                          const InputDecoration(
-                            prefixIcon: Icon(Icons.search),
-                            labelText: 'بحث بالاسم أو التصنيف',
-                          ),
-                        ),
-                      ),
-                    ),
-                    SizedBox(
-                      width: 190,
-                      child: DropdownButtonFormField<String>(
-                        alignment: AlignmentDirectional.centerStart,
-                        initialValue: filter,
-                        items: [
-                          DropdownMenuItem(
-                            value: 'all',
-                            child: adminRtlDropdownItem('كل المنتجات'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'active',
-                            child: adminRtlDropdownItem('النشطة'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'inactive',
-                            child: adminRtlDropdownItem('المتوقفة'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'stock',
-                            child: adminRtlDropdownItem('متوفرة'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'out',
-                            child: adminRtlDropdownItem('نفدت'),
-                          ),
-                        ],
-                        onChanged: (value) =>
-                            setState(() => filter = value ?? 'all'),
-                        decoration: adminRtlInputDecoration(
-                          const InputDecoration(labelText: 'تصفية'),
-                        ),
-                      ),
-                    ),
-                  ],
+                FilledButton.icon(
+                  onPressed: () => _edit(),
+                  icon: const Icon(Icons.add),
+                  label: const Text('إضافة منتج'),
                 ),
-                const SizedBox(height: 18),
-                if (rows.isEmpty)
-                  const _EmptyState(message: 'لا توجد منتجات مطابقة.')
-                else
-                  ...rows.map(
-                    (row) => _ProductRow(
-                      row: row,
-                      service: widget.service,
-                      onChanged: widget.onChanged,
-                      onEdit: () => _edit(row),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                SizedBox(
+                  width: 310,
+                  child: TextField(
+                    textDirection: TextDirection.rtl,
+                    textAlign: TextAlign.right,
+                    onChanged: (value) => setState(() => query = value),
+                    decoration: adminRtlInputDecoration(
+                      const InputDecoration(
+                        prefixIcon: Icon(Icons.search),
+                        labelText: 'بحث بالاسم أو التصنيف',
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 190,
+                  child: DropdownButtonFormField<String>(
+                    alignment: AlignmentDirectional.centerStart,
+                    initialValue: filter,
+                    items: [
+                      DropdownMenuItem(
+                        value: 'all',
+                        child: adminRtlDropdownItem('كل المنتجات'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'active',
+                        child: adminRtlDropdownItem('النشطة'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'inactive',
+                        child: adminRtlDropdownItem('المتوقفة'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'stock',
+                        child: adminRtlDropdownItem('متوفرة'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'out',
+                        child: adminRtlDropdownItem('نفدت'),
+                      ),
+                    ],
+                    onChanged: (value) =>
+                        setState(() => filter = value ?? 'all'),
+                    decoration: adminRtlInputDecoration(
+                      const InputDecoration(labelText: 'تصفية'),
+                    ),
+                  ),
+                ),
+                if (_temporaryProductImageBackfillEnabled)
+                  OutlinedButton.icon(
+                    onPressed: _backfillingProductImages
+                        ? null
+                        : _runTemporaryProductImageBackfill,
+                    icon: _backfillingProductImages
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.auto_awesome_outlined),
+                    label: Text(
+                      _backfillingProductImages && _backfillTotal > 0
+                          ? '$_backfillCompleted / $_backfillTotal'
+                          : 'إنشاء مشتقات صور المنتجات',
                     ),
                   ),
               ],
             ),
-          );
-        },
+            const SizedBox(height: 18),
+            if (rows.isEmpty)
+              const _EmptyState(message: 'لا توجد منتجات مطابقة.')
+            else
+              ...rows.map(
+                (row) => _ProductRow(
+                  row: row,
+                  service: widget.service,
+                  onChanged: widget.onChanged,
+                  onDeleted: _refreshProductsAfterDelete,
+                  onEdit: () => _edit(row),
+                ),
+              ),
+          ],
+        ),
       );
+    },
+  );
 
   bool _matches(Map<String, dynamic> row) {
     final stock = _visibleProductStock(row);
@@ -891,10 +963,12 @@ class _ProductRow extends StatelessWidget {
     required this.row,
     required this.service,
     required this.onChanged,
+    required this.onDeleted,
     required this.onEdit,
   });
   final Map<String, dynamic> row;
   final AdminService service;
+  final Future<void> Function() onDeleted;
   final VoidCallback onChanged, onEdit;
   @override
   Widget build(BuildContext context) {
@@ -976,22 +1050,53 @@ class _ProductRow extends StatelessWidget {
                 context,
                 title: 'حذف المنتج',
                 message:
-                    'هل أنت متأكد؟ المنتجات المرتبطة بطلبات سابقة لا يمكن حذفها.',
+                    'سيتم حذف المنتج من المتجر والمخزون الحالي، مع الاحتفاظ بالطلبات السابقة وسجل المبيعات.',
                 confirmLabel: 'حذف',
               );
               if (!context.mounted) return;
               if (okay) {
                 try {
-                  await service.deleteProduct(row['id'] as String);
-                  if (!context.mounted) return;
-                  onChanged();
-                  showAdminMessage(context, 'تم حذف المنتج.');
-                } catch (_) {
-                  showAdminMessage(
-                    context,
-                    'تعذر حذف المنتج المرتبط بطلبات.',
-                    error: true,
+                  final deleteResult = await service.deleteProduct(
+                    row['id'] as String,
                   );
+                  if (!context.mounted) return;
+                  try {
+                    await onDeleted();
+                    if (context.mounted) {
+                      onChanged();
+                      showAdminMessage(
+                        context,
+                        deleteResult.storageCleanupSucceeded
+                            ? 'تم حذف المنتج.'
+                            : 'تم حذف المنتج، لكن تعذر حذف بعض ملفات الصور من التخزين.',
+                        error: !deleteResult.storageCleanupSucceeded,
+                      );
+                    }
+                  } catch (_) {
+                    if (context.mounted) {
+                      showAdminMessage(
+                        context,
+                        'تم حذف المنتج، لكن تعذر تحديث القائمة. حاول إعادة التحميل.',
+                        error: true,
+                      );
+                    }
+                  }
+                } on ProductHasActiveOrdersException {
+                  if (context.mounted) {
+                    showAdminMessage(
+                      context,
+                      'لا يمكن حذف المنتج لوجود طلبات نشطة قيد الانتظار أو التأكيد أو التجهيز. أكمل هذه الطلبات أو ألغها أولًا.',
+                      error: true,
+                    );
+                  }
+                } catch (_) {
+                  if (context.mounted) {
+                    showAdminMessage(
+                      context,
+                      'تعذر حذف المنتج. لم يتم تغيير قائمة المنتجات.',
+                      error: true,
+                    );
+                  }
                 }
               }
             },
@@ -1479,35 +1584,18 @@ class _ProductEditorState extends State<_ProductEditor> {
       color: canvasColor,
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsetsDirectional.fromSTEB(8, 4, 8, 4),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 48,
-            child: Text(
-              size,
-              style: const TextStyle(fontWeight: FontWeight.w900),
-            ),
-          ),
-          AdminStatusBadge(
-            label: value == 0
-                ? 'نفد المخزون'
-                : value <= 3
-                ? 'مخزون منخفض'
-                : 'متوفر',
-            tone: tone,
-          ),
-          const Spacer(),
-          StockStepper(
-            value: value,
-            compact: true,
-            onChanged: (next) => setState(() => sizes[size] = next),
-          ),
-          IconButton(
-            tooltip: 'إزالة المقاس',
-            onPressed: () => _removeSize(size),
-            icon: const Icon(Icons.close, color: AdminColors.danger),
-          ),
-        ],
+      child: AdminVariantStockRow(
+        sizeLabel: size,
+        sizeLabelKey: ValueKey('admin-product-size-$size'),
+        value: value,
+        statusLabel: value == 0
+            ? 'نفد المخزون'
+            : value <= 3
+            ? 'مخزون منخفض'
+            : 'متوفر',
+        statusTone: tone,
+        onChanged: (next) => setState(() => sizes[size] = next),
+        onRemove: () => _removeSize(size),
       ),
     );
   }
@@ -1527,6 +1615,7 @@ class _ProductEditorState extends State<_ProductEditor> {
       await widget.service.removeProductImage(
         image['id'] as String,
         image['storage_path'] as String? ?? '',
+        productId: widget.existing?['id'] as String,
       );
       if (mounted) setState(() => (target ?? existingImages).remove(image));
     } catch (_) {
@@ -1809,32 +1898,18 @@ class _ProductEditorState extends State<_ProductEditor> {
 
   Widget _colorSizeRow(_ColorDraft color, String size) {
     final value = color.sizes[size] ?? 0;
-    return Row(
-      children: [
-        SizedBox(
-          width: 48,
-          child: Text(
-            size,
-            textDirection: TextDirection.ltr,
-            style: const TextStyle(fontWeight: FontWeight.w900),
-          ),
-        ),
-        Expanded(
-          child: StockStepper(
-            value: value,
-            compact: true,
-            onChanged: (next) => setState(() => color.sizes[size] = next),
-          ),
-        ),
-        IconButton(
-          tooltip: 'إزالة المقاس',
-          onPressed: () => setState(() {
-            color.sizes.remove(size);
-            color.variantIds.remove(size);
-          }),
-          icon: const Icon(Icons.close, color: AdminColors.danger),
-        ),
-      ],
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: AdminVariantStockRow(
+        sizeLabel: size,
+        sizeLabelKey: ValueKey('admin-color-${color.name}-size-$size'),
+        value: value,
+        onChanged: (next) => setState(() => color.sizes[size] = next),
+        onRemove: () => setState(() {
+          color.sizes.remove(size);
+          color.variantIds.remove(size);
+        }),
+      ),
     );
   }
 
@@ -2291,61 +2366,105 @@ class _InventoryState extends State<_Inventory> {
         : stock <= 3
         ? AdminStatusTone.warning
         : AdminStatusTone.good;
+    final statusLabel = stock == 0
+        ? 'نفد المخزون'
+        : stock <= 3
+        ? 'مخزون منخفض'
+        : 'متوفر';
+    final color = row['product_colors'] as Map?;
+    final colorName = color?['name_ar'] as String?;
+    final productName = '${product['name_ar'] ?? 'منتج'}';
+    final sizeKey = ValueKey('admin-inventory-size-${row['id']}');
+
+    Widget details({required bool includeStatus}) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          colorName == null ? productName : '$productName  ·  اللون $colorName',
+          style: const TextStyle(fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'المقاس: ${row['size'] ?? ''}',
+          key: sizeKey,
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+        if (includeStatus) ...[
+          const SizedBox(height: 6),
+          AdminStatusBadge(label: statusLabel, tone: tone),
+        ],
+      ],
+    );
+
+    final stepper = StockStepper(
+      value: stock,
+      compact: true,
+      onChanged: (value) async {
+        try {
+          await widget.service.setStock(row['id'] as String, value);
+          if (mounted) {
+            setState(() => row['stock_quantity'] = value);
+            showAdminMessage(context, 'تم تحديث المخزون.');
+          }
+        } catch (_) {
+          if (mounted) {
+            showAdminMessage(context, 'تعذر تحديث المخزون.', error: true);
+          }
+        }
+      },
+    );
+
+    Widget? thumbnail;
+    if (image != null) {
+      thumbnail = Padding(
+        padding: const EdgeInsetsDirectional.only(end: 12),
+        child: SafeProductImage(
+          url: image,
+          width: 48,
+          height: 56,
+          fit: BoxFit.cover,
+          fallback: const Icon(Icons.image_outlined),
+        ),
+      );
+    }
+
     return Container(
       color: Colors.white,
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
-      child: Row(
-        children: [
-          if (image != null)
-            Padding(
-              padding: const EdgeInsetsDirectional.only(end: 12),
-              child: SafeProductImage(
-                url: image,
-                width: 48,
-                height: 56,
-                fit: BoxFit.cover,
-                fallback: const Icon(Icons.image_outlined),
-              ),
-            ),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 520) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  '${product['name_ar'] ?? 'منتج'}${(row['product_colors'] as Map?)?['name_ar'] == null ? '' : '  ·  اللون ${(row['product_colors'] as Map)['name_ar']}'}  ·  المقاس ${row['size']}',
-                  style: const TextStyle(fontWeight: FontWeight.w900),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ?thumbnail,
+                    Expanded(child: details(includeStatus: false)),
+                  ],
                 ),
-                const SizedBox(height: 6),
-                AdminStatusBadge(
-                  label: stock == 0
-                      ? 'نفد المخزون'
-                      : stock <= 3
-                      ? 'مخزون منخفض'
-                      : 'متوفر',
-                  tone: tone,
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    AdminStatusBadge(label: statusLabel, tone: tone),
+                    const Spacer(),
+                    stepper,
+                  ],
                 ),
               ],
-            ),
-          ),
-          StockStepper(
-            value: stock,
-            compact: true,
-            onChanged: (value) async {
-              try {
-                await widget.service.setStock(row['id'] as String, value);
-                if (mounted) {
-                  setState(() => row['stock_quantity'] = value);
-                  showAdminMessage(context, 'تم تحديث المخزون.');
-                }
-              } catch (_) {
-                if (mounted) {
-                  showAdminMessage(context, 'تعذر تحديث المخزون.', error: true);
-                }
-              }
-            },
-          ),
-        ],
+            );
+          }
+          return Row(
+            children: [
+              ?thumbnail,
+              Expanded(child: details(includeStatus: true)),
+              const SizedBox(width: 12),
+              stepper,
+            ],
+          );
+        },
       ),
     );
   }

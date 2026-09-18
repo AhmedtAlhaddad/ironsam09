@@ -1,3 +1,26 @@
+const productGenderMenValue = 'men';
+const productGenderWomenValue = 'women';
+const productGenderUnisexValue = 'unisex';
+
+enum ProductGender {
+  men(productGenderMenValue),
+  women(productGenderWomenValue),
+  unisex(productGenderUnisexValue);
+
+  const ProductGender(this.value);
+
+  final String value;
+
+  static ProductGender? fromValue(String? value) {
+    return switch (value?.trim().toLowerCase()) {
+      'men' || 'رجال' || 'الرجال' => ProductGender.men,
+      'women' || 'نساء' || 'النساء' => ProductGender.women,
+      'unisex' || 'للجنسين' => ProductGender.unisex,
+      _ => null,
+    };
+  }
+}
+
 class Product {
   const Product({
     required this.name,
@@ -21,6 +44,8 @@ class Product {
   final String category;
   final String? categoryId;
   final String gender;
+
+  ProductGender? get normalizedGender => ProductGender.fromValue(gender);
   final double price;
   final String sizes;
   final String status;
@@ -30,6 +55,13 @@ class Product {
   final List<ProductImage> images;
   final List<ProductColor> colors;
   final List<ProductVariant> variants;
+
+  String get catalogImageUrl {
+    if (images.isNotEmpty && images.first.thumbnailUrl.isNotEmpty) {
+      return images.first.thumbnailUrl;
+    }
+    return imageUrl;
+  }
 
   List<ProductColor> get activeColors =>
       colors.where((color) => color.active).toList(growable: false);
@@ -195,6 +227,8 @@ class ProductImage {
   const ProductImage({
     this.id,
     required this.url,
+    this.thumbnailUrl = '',
+    this.heroUrl = '',
     this.colorId,
     this.storagePath,
     this.sortOrder = 0,
@@ -203,6 +237,8 @@ class ProductImage {
 
   final String? id;
   final String url;
+  final String thumbnailUrl;
+  final String heroUrl;
   final String? colorId;
   final String? storagePath;
   final int sortOrder;

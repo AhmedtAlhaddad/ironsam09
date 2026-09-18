@@ -18,10 +18,15 @@ import 'storefront_logo.dart';
 export 'storefront_logo.dart';
 
 class HeroImageSource {
-  const HeroImageSource({required this.url, required this.productName});
+  const HeroImageSource({
+    required this.url,
+    required this.productName,
+    this.fallbackUrl,
+  });
 
   final String url;
   final String productName;
+  final String? fallbackUrl;
 }
 
 List<HeroImageSource> buildHeroImageSources(Iterable<Product> products) {
@@ -35,18 +40,33 @@ List<HeroImageSource> buildHeroImageSources(Iterable<Product> products) {
       ...product.images.map((image) => image.url),
     ];
     String? representativeUrl;
+    String? fallbackUrl;
+    String? sourceIdentityUrl;
     for (final candidate in candidates) {
-      final safeUrl = safeProductImageUrl(candidate);
-      if (safeUrl != null) {
-        representativeUrl = safeUrl;
-        break;
-      }
+      final safeOriginalUrl = safeProductImageUrl(candidate);
+      if (safeOriginalUrl == null) continue;
+      final imageIndex = product.images.indexWhere(
+        (image) => safeProductImageUrl(image.url) == safeOriginalUrl,
+      );
+      final safeHeroUrl = imageIndex < 0
+          ? null
+          : safeProductImageUrl(product.images[imageIndex].heroUrl);
+      representativeUrl = safeHeroUrl ?? safeOriginalUrl;
+      fallbackUrl = safeHeroUrl == null ? null : safeOriginalUrl;
+      sourceIdentityUrl = safeOriginalUrl;
+      break;
     }
-    if (representativeUrl == null || !seenUrls.add(representativeUrl)) {
+    if (representativeUrl == null ||
+        sourceIdentityUrl == null ||
+        !seenUrls.add(sourceIdentityUrl)) {
       continue;
     }
     sources.add(
-      HeroImageSource(url: representativeUrl, productName: product.name),
+      HeroImageSource(
+        url: representativeUrl,
+        fallbackUrl: fallbackUrl,
+        productName: product.name,
+      ),
     );
   }
 
@@ -613,6 +633,7 @@ class _RotatingHeroImageState extends State<_RotatingHeroImage> {
               child: SafeProductImage(
                 key: ValueKey(source?.url ?? 'hero-image-fallback'),
                 url: source?.url,
+                fallbackUrl: source?.fallbackUrl,
                 fit: BoxFit.cover,
                 cacheWidth: widget.cacheWidth,
                 filterQuality: FilterQuality.medium,
@@ -1163,18 +1184,18 @@ class ProductGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (products.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 60),
-        child: Center(child: Text('لا توجد منتجات مطابقة للبحث.')),
+      return const SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 60),
+          child: Center(child: Text('لا توجد منتجات مطابقة للبحث.')),
+        ),
       );
     }
-    return LayoutBuilder(
+    return SliverLayoutBuilder(
       builder: (context, constraints) {
-        final width = constraints.maxWidth;
+        final width = constraints.crossAxisExtent;
         final columns = _catalogColumnCount(width);
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
+        return SliverGrid.builder(
           itemCount: products.length,
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: columns,
@@ -1202,6 +1223,7 @@ class CatalogResults extends StatelessWidget {
     required this.hasActiveFilter,
     required this.onRetry,
     this.onSearchPressed,
+    this.horizontalPadding = 0,
     super.key,
   });
 
@@ -1212,152 +1234,161 @@ class CatalogResults extends StatelessWidget {
   final bool hasActiveFilter;
   final VoidCallback onRetry;
   final VoidCallback? onSearchPressed;
+  final double horizontalPadding;
+
+  Widget _paddedSliver(Widget sliver) {
+    return SliverPadding(
+      padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+      sliver: sliver,
+    );
+  }
+
+  Widget _paddedBox(Widget child) {
+    return _paddedSliver(SliverToBoxAdapter(child: child));
+  }
 
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
-      if (products.isEmpty) return const _CatalogLoadingState();
-      return Semantics(
-        key: const ValueKey('catalog-loading-state'),
-        container: true,
-        liveRegion: true,
-        label: 'جاري تحديث المنتجات',
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const LinearProgressIndicator(minHeight: 2),
-            const SizedBox(height: StorefrontSpacing.lg),
-            ProductGrid(
-              products: products,
-              store: store,
-              onSearchPressed: onSearchPressed,
+      return SliverMainAxisGroup(
+        slivers: [
+          _paddedBox(
+            Semantics(
+              key: const ValueKey('catalog-loading-state'),
+              container: true,
+              liveRegion: true,
+              label: products.isEmpty
+                  ? 'جاري تحميل المنتجات'
+                  : 'جاري تحديث المنتجات',
+              child: const LinearProgressIndicator(minHeight: 2),
             ),
-          ],
-        ),
+          ),
+          const SliverToBoxAdapter(
+            child: SizedBox(height: StorefrontSpacing.lg),
+          ),
+          _paddedSliver(
+            products.isEmpty
+                ? const _CatalogLoadingGrid()
+                : ProductGrid(
+                    products: products,
+                    store: store,
+                    onSearchPressed: onSearchPressed,
+                  ),
+          ),
+        ],
       );
     }
 
     if (error != null && products.isEmpty) {
-      return _CatalogStatePanel(
-        key: const ValueKey('catalog-error-state'),
-        icon: Icons.wifi_off_outlined,
-        title: 'تعذّر تحميل المنتجات',
-        message: 'تحقق من اتصالك وحاول مرة أخرى.',
-        actionLabel: 'إعادة المحاولة',
-        onAction: onRetry,
-        isError: true,
+      return _paddedBox(
+        _CatalogStatePanel(
+          key: const ValueKey('catalog-error-state'),
+          icon: Icons.wifi_off_outlined,
+          title: 'تعذّر تحميل المنتجات',
+          message: 'تحقق من اتصالك وحاول مرة أخرى.',
+          actionLabel: 'إعادة المحاولة',
+          onAction: onRetry,
+          isError: true,
+        ),
       );
     }
 
     if (products.isEmpty) {
-      return _CatalogStatePanel(
-        key: const ValueKey('catalog-empty-state'),
-        icon: hasActiveFilter
-            ? Icons.search_off_outlined
-            : Icons.inventory_2_outlined,
-        title: hasActiveFilter
-            ? 'لا توجد نتائج مطابقة'
-            : 'لا توجد منتجات حاليًا',
-        message: hasActiveFilter
-            ? 'جرّب كلمة بحث أخرى أو تصفّح فئة مختلفة.'
-            : 'ستظهر التشكيلة الجديدة هنا فور توفرها.',
-        actionLabel: hasActiveFilter ? 'العودة إلى البحث' : null,
-        onAction: hasActiveFilter ? onSearchPressed : null,
+      return _paddedBox(
+        _CatalogStatePanel(
+          key: const ValueKey('catalog-empty-state'),
+          icon: hasActiveFilter
+              ? Icons.search_off_outlined
+              : Icons.inventory_2_outlined,
+          title: hasActiveFilter
+              ? 'لا توجد نتائج مطابقة'
+              : 'لا توجد منتجات حاليًا',
+          message: hasActiveFilter
+              ? 'جرّب كلمة بحث أخرى أو تصفّح فئة مختلفة.'
+              : 'ستظهر التشكيلة الجديدة هنا فور توفرها.',
+          actionLabel: hasActiveFilter ? 'العودة إلى البحث' : null,
+          onAction: hasActiveFilter ? onSearchPressed : null,
+        ),
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
+    return SliverMainAxisGroup(
+      slivers: [
         if (error != null) ...[
-          _CatalogErrorNotice(onRetry: onRetry),
-          const SizedBox(height: StorefrontSpacing.lg),
+          _paddedBox(_CatalogErrorNotice(onRetry: onRetry)),
+          const SliverToBoxAdapter(
+            child: SizedBox(height: StorefrontSpacing.lg),
+          ),
         ],
-        ProductGrid(
-          products: products,
-          store: store,
-          onSearchPressed: onSearchPressed,
+        _paddedSliver(
+          ProductGrid(
+            products: products,
+            store: store,
+            onSearchPressed: onSearchPressed,
+          ),
         ),
       ],
     );
   }
 }
 
-class _CatalogLoadingState extends StatelessWidget {
-  const _CatalogLoadingState();
+class _CatalogLoadingGrid extends StatelessWidget {
+  const _CatalogLoadingGrid();
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      key: const ValueKey('catalog-loading-state'),
-      container: true,
-      liveRegion: true,
-      label: 'جاري تحميل المنتجات',
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final width = constraints.maxWidth;
-          final columns = _catalogColumnCount(width);
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const LinearProgressIndicator(minHeight: 2),
-              const SizedBox(height: StorefrontSpacing.lg),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: columns * 2,
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: columns,
-                  crossAxisSpacing: _catalogCrossSpacing(width),
-                  mainAxisSpacing: _catalogMainSpacing(width),
-                  childAspectRatio: _catalogCardAspectRatio(width),
-                ),
-                itemBuilder: (context, index) => ExcludeSemantics(
-                  child: TweenAnimationBuilder<double>(
-                    tween: Tween(begin: .55, end: 1),
-                    duration: StorefrontMotion.resolve(
-                      context,
-                      StorefrontMotion.deliberate,
-                    ),
-                    curve: StorefrontMotion.curve,
-                    builder: (context, value, child) =>
-                        Opacity(opacity: value, child: child),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: StorefrontColors.surfaceMuted,
-                              borderRadius: const BorderRadius.all(
-                                Radius.circular(StorefrontRadius.subtle),
-                              ),
-                            ),
-                          ),
+    return SliverLayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.crossAxisExtent;
+        final columns = _catalogColumnCount(width);
+        return SliverGrid.builder(
+          itemCount: columns * 2,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            crossAxisSpacing: _catalogCrossSpacing(width),
+            mainAxisSpacing: _catalogMainSpacing(width),
+            childAspectRatio: _catalogCardAspectRatio(width),
+          ),
+          itemBuilder: (context, index) => ExcludeSemantics(
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: .55, end: 1),
+              duration: StorefrontMotion.resolve(
+                context,
+                StorefrontMotion.deliberate,
+              ),
+              curve: StorefrontMotion.curve,
+              builder: (context, value, child) =>
+                  Opacity(opacity: value, child: child),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: StorefrontColors.surfaceMuted,
+                        borderRadius: const BorderRadius.all(
+                          Radius.circular(StorefrontRadius.subtle),
                         ),
-                        const SizedBox(height: StorefrontSpacing.md),
-                        Container(
-                          height: 14,
-                          color: StorefrontColors.surfaceMuted,
-                        ),
-                        const SizedBox(height: StorefrontSpacing.xs),
-                        FractionallySizedBox(
-                          widthFactor: .55,
-                          alignment: AlignmentDirectional.centerStart,
-                          child: Container(
-                            height: 14,
-                            color: StorefrontColors.surfaceMuted,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
-                ),
+                  const SizedBox(height: StorefrontSpacing.md),
+                  Container(height: 14, color: StorefrontColors.surfaceMuted),
+                  const SizedBox(height: StorefrontSpacing.xs),
+                  FractionallySizedBox(
+                    widthFactor: .55,
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Container(
+                      height: 14,
+                      color: StorefrontColors.surfaceMuted,
+                    ),
+                  ),
+                ],
               ),
-            ],
-          );
-        },
-      ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -1599,7 +1630,8 @@ class _ProductCardState extends State<ProductCard> {
                                     child: ColoredBox(
                                       color: StorefrontColors.surfaceMuted,
                                       child: SafeProductImage(
-                                        url: product.imageUrl,
+                                        url: product.catalogImageUrl,
+                                        fallbackUrl: product.imageUrl,
                                         fit: BoxFit.cover,
                                         cacheWidth: cacheWidth,
                                         filterQuality: FilterQuality.medium,
@@ -1786,34 +1818,78 @@ class StoreFooter extends StatelessWidget {
             constraints: const BoxConstraints(
               maxWidth: StorefrontLayout.contentMaxWidth,
             ),
-            child: Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.end,
-              spacing: StorefrontSpacing.xl,
-              runSpacing: StorefrontSpacing.md,
-              children: [
-                const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            child: LayoutBuilder(
+              builder: (context, footerConstraints) {
+                final isMobile = footerConstraints.maxWidth < 700;
+                final logoSection = Column(
+                  crossAxisAlignment: isMobile
+                      ? CrossAxisAlignment.center
+                      : CrossAxisAlignment.start,
                   children: [
-                    IronSamLogo(width: 118, height: 70),
-                    SizedBox(height: 8),
+                    const IronSamLogo(width: 118, height: 70),
+                    const SizedBox(height: 8),
+                    Text(
+                      'آيرون سام',
+                      textAlign: isMobile ? TextAlign.center : TextAlign.start,
+                      style: TextStyle(
+                        color: StorefrontColors.ink,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
                     Text(
                       'ملابس رياضية لكل حركة',
+                      textAlign: isMobile ? TextAlign.center : TextAlign.start,
                       style: TextStyle(
                         color: StorefrontColors.mutedInk,
                         fontSize: 12,
                       ),
                     ),
                   ],
-                ),
-                Text(
-                  '© ${DateTime.now().year} آيرون سام. جميع الحقوق محفوظة.',
-                  style: const TextStyle(
-                    color: StorefrontColors.mutedInk,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
+                );
+                final contactSection = Column(
+                  crossAxisAlignment: isMobile
+                      ? CrossAxisAlignment.center
+                      : CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'تم تطوير الموقع بواسطة أحمد الحداد',
+                      textAlign: isMobile ? TextAlign.center : TextAlign.end,
+                      style: TextStyle(
+                        color: StorefrontColors.mutedInk,
+                        fontSize: 12,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'للتواصل: 0918063993',
+                      textAlign: isMobile ? TextAlign.center : TextAlign.end,
+                      style: TextStyle(
+                        color: StorefrontColors.subtleInk,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                );
+                final mobileContactSection = Padding(
+                  padding: const EdgeInsets.only(top: StorefrontSpacing.md),
+                  child: contactSection,
+                );
+
+                return Flex(
+                  direction: isMobile ? Axis.vertical : Axis.horizontal,
+                  textDirection: TextDirection.rtl,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: isMobile
+                      ? CrossAxisAlignment.center
+                      : CrossAxisAlignment.end,
+                  children: [
+                    logoSection,
+                    isMobile ? mobileContactSection : contactSection,
+                  ],
+                );
+              },
             ),
           ),
         ),

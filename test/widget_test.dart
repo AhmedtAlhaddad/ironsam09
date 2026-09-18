@@ -448,15 +448,17 @@ void main() {
       home: Directionality(
         textDirection: TextDirection.rtl,
         child: Scaffold(
-          body: SingleChildScrollView(
-            child: CatalogResults(
-              isLoading: loading,
-              error: error,
-              products: const [],
-              store: store,
-              hasActiveFilter: false,
-              onRetry: () {},
-            ),
+          body: CustomScrollView(
+            slivers: [
+              CatalogResults(
+                isLoading: loading,
+                error: error,
+                products: const [],
+                store: store,
+                hasActiveFilter: false,
+                onRetry: () {},
+              ),
+            ],
           ),
         ),
       ),
@@ -704,13 +706,13 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: SingleChildScrollView(
-              child: ProductGrid(products: gridProducts, store: store),
+            body: CustomScrollView(
+              slivers: [ProductGrid(products: gridProducts, store: store)],
             ),
           ),
         ),
       );
-      final grid = tester.widget<GridView>(find.byType(GridView));
+      final grid = tester.widget<SliverGrid>(find.byType(SliverGrid));
       final delegate =
           grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
       expect(delegate.crossAxisCount, expectation.$2);
@@ -1046,6 +1048,7 @@ void main() {
     await tester.pump();
     expect(find.text('الرجال'), findsWidgets);
     expect(find.text('تيشيرت الأداء الأساسي'), findsOneWidget);
+    expect(find.text('هودي التدريب الثقيل'), findsOneWidget);
     expect(find.text('سترة ستوديو خفيفة'), findsNothing);
 
     await tester.pumpWidget(MaterialApp(home: WomenPage(store: store)));
@@ -1053,6 +1056,7 @@ void main() {
     await tester.pump();
     expect(find.text('النساء'), findsWidgets);
     expect(find.text('سترة ستوديو خفيفة'), findsOneWidget);
+    expect(find.text('هودي التدريب الثقيل'), findsOneWidget);
     expect(find.text('تيشيرت الأداء الأساسي'), findsNothing);
   });
 
@@ -1509,6 +1513,11 @@ void main() {
     expect(
       find.text('تيشيرت الأداء الأساسي', skipOffstage: false),
       findsOneWidget,
+    );
+    await tester.dragUntilVisible(
+      find.text('سترة ستوديو خفيفة'),
+      find.byKey(const ValueKey('catalog-scroll-view')),
+      const Offset(0, -300),
     );
     expect(find.text('سترة ستوديو خفيفة', skipOffstage: false), findsOneWidget);
     expect(tester.takeException(), isNull);

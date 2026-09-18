@@ -4,7 +4,7 @@ const products = <Product>[
   Product(
     name: 'تيشيرت الأداء الأساسي',
     category: 'تيشيرتات',
-    gender: 'رجال',
+    gender: productGenderMenValue,
     price: 145,
     sizes: 'S - XL',
     status: 'متوفر',
@@ -14,7 +14,7 @@ const products = <Product>[
   Product(
     name: 'هودي التدريب الثقيل',
     category: 'هوديز',
-    gender: 'للجنسين',
+    gender: productGenderUnisexValue,
     price: 265,
     sizes: 'M - XXL',
     status: 'جديد',
@@ -24,7 +24,7 @@ const products = <Product>[
   Product(
     name: 'طقم التدريب الموحد',
     category: 'أطقم',
-    gender: 'نساء',
+    gender: productGenderWomenValue,
     price: 320,
     sizes: 'XS - L',
     status: 'نادر',
@@ -34,7 +34,7 @@ const products = <Product>[
   Product(
     name: 'حذاء الجري التكنولوجي',
     category: 'أحذية',
-    gender: 'للجنسين',
+    gender: productGenderUnisexValue,
     price: 395,
     sizes: '40 - 45',
     status: 'كمية محدودة',
@@ -44,7 +44,7 @@ const products = <Product>[
   Product(
     name: 'سترة ستوديو خفيفة',
     category: 'جاكيتات',
-    gender: 'نساء',
+    gender: productGenderWomenValue,
     price: 210,
     sizes: 'S - XL',
     status: 'متوفر',
@@ -54,7 +54,7 @@ const products = <Product>[
   Product(
     name: 'شورت التمرين 5 إنش',
     category: 'شورتات',
-    gender: 'رجال',
+    gender: productGenderMenValue,
     price: 120,
     sizes: 'S - XXL',
     status: 'متوفر',
@@ -64,7 +64,7 @@ const products = <Product>[
   Product(
     name: 'بنطال الجري المريح',
     category: 'بناطيل',
-    gender: 'رجال',
+    gender: productGenderMenValue,
     price: 185,
     sizes: 'M - XL',
     status: 'متوفر',
@@ -74,7 +74,7 @@ const products = <Product>[
   Product(
     name: 'حقيبة النادي الرياضية',
     category: 'إكسسوارات',
-    gender: 'للجنسين',
+    gender: productGenderUnisexValue,
     price: 155,
     sizes: 'مقاس واحد',
     status: 'وصل حديثًا',

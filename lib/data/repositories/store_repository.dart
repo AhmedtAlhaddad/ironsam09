@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/utils/image_url_policy.dart';
+import '../../core/utils/product_image_paths.dart';
 import '../catalog/product_catalog.dart';
 import '../models/category.dart';
 import '../models/order.dart';
@@ -143,8 +144,9 @@ class SupabaseStoreRepository implements StoreRepository {
     return null;
   }
 
-  static Product _productFromRow(dynamic raw) {
+  Product _productFromRow(dynamic raw) {
     final row = Map<String, dynamic>.from(raw as Map);
+    final productId = row['id'] as String?;
     final category = row['categories'] is Map
         ? Map<String, dynamic>.from(row['categories'] as Map)
         : <String, dynamic>{};
@@ -162,16 +164,45 @@ class SupabaseStoreRepository implements StoreRepository {
         .whereType<String>()
         .toList();
     final productImages = images
-        .map(
-          (image) => ProductImage(
+        .map((image) {
+          final storagePath = image['storage_path'] as String?;
+          final thumbnailUrl =
+              productId != null &&
+                  storagePath != null &&
+                  storagePath.trim().isNotEmpty
+              ? client.storage
+                    .from(productImagesBucket)
+                    .getPublicUrl(
+                      productThumbnailStoragePath(
+                        productId: productId,
+                        originalStoragePath: storagePath,
+                      ),
+                    )
+              : null;
+          final heroUrl =
+              productId != null &&
+                  storagePath != null &&
+                  storagePath.trim().isNotEmpty
+              ? client.storage
+                    .from(productImagesBucket)
+                    .getPublicUrl(
+                      productHeroStoragePath(
+                        productId: productId,
+                        originalStoragePath: storagePath,
+                      ),
+                    )
+              : null;
+          return ProductImage(
             id: image['id'] as String?,
             colorId: image['color_id'] as String?,
-            storagePath: image['storage_path'] as String?,
+            storagePath: storagePath,
             url: safeProductImageUrl(image['url'] as String?) ?? '',
+            thumbnailUrl: safeProductImageUrl(thumbnailUrl) ?? '',
+            heroUrl: safeProductImageUrl(heroUrl) ?? '',
             sortOrder: (image['sort_order'] as num?)?.toInt() ?? 0,
             isCover: image['is_cover'] as bool? ?? false,
-          ),
-        )
+          );
+        })
         .where((image) => image.url.isNotEmpty)
         .toList();
     final variants = (row['product_variants'] as List<dynamic>? ?? [])
@@ -202,20 +233,17 @@ class SupabaseStoreRepository implements StoreRepository {
         )
         .where((color) => color.nameAr.isNotEmpty)
         .toList();
-    final rawGender = row['gender'] as String? ?? 'unisex';
-    final displayGender = switch (rawGender) {
-      'men' => 'الرجال',
-      'women' => 'النساء',
-      _ => 'للجنسين',
-    };
+    final rawGender = row['gender'] as String? ?? ProductGender.unisex.value;
+    final productGender =
+        ProductGender.fromValue(rawGender) ?? ProductGender.unisex;
     final badge = row['badge'] as String? ?? '';
     return Product(
-      id: row['id'] as String?,
+      id: productId,
       name: row['name_ar'] as String? ?? '',
       description: row['description_ar'] as String? ?? '',
       category: category['name_ar'] as String? ?? '',
       categoryId: row['category_id'] as String?,
-      gender: displayGender,
+      gender: productGender.value,
       price: (row['price_lyd'] as num?)?.toDouble() ?? 0,
       sizes: variants.map((variant) => variant.size).join(' - '),
       status: switch (badge) {
