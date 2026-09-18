@@ -64,3 +64,5 @@ app.*.map.json
 
 # SuperDesign local session state
 .superdesign/resume.json
+
+.wrangler/
