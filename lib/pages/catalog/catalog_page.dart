@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/storefront_theme.dart';
 import '../../data/models/product.dart';
 import '../../features/cart/cart_state.dart';
+import '../../navigation/storefront_navigation.dart';
 import '../../widgets/catalog_widgets.dart';
 import '../cart/cart_page.dart';
 import 'storefront_audience.dart';
@@ -145,6 +146,11 @@ class _CatalogPageState extends State<CatalogPage> {
   }
 
   void openCart() {
+    final navigation = StorefrontNavigation.maybeOf(context);
+    if (navigation != null) {
+      navigation.openCart();
+      return;
+    }
     Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => CartPage(store: widget.store)),
     );
@@ -152,14 +158,36 @@ class _CatalogPageState extends State<CatalogPage> {
 
   void _selectAudience(StorefrontAudience audience) {
     if (audience == widget.audience) return;
+    final navigation = StorefrontNavigation.maybeOf(context);
+    if (navigation != null) {
+      navigation.selectAudience(audience);
+      return;
+    }
     final page = switch (audience) {
       StorefrontAudience.all => CollectionsPage(store: widget.store),
       StorefrontAudience.men => MenPage(store: widget.store),
       StorefrontAudience.women => WomenPage(store: widget.store),
     };
-    Navigator.of(
-      context,
-    ).pushReplacement(MaterialPageRoute<void>(builder: (_) => page));
+    final navigator = Navigator.of(context);
+    if (audience == StorefrontAudience.all && navigator.canPop()) {
+      navigator.popUntil((route) => route.isFirst);
+      return;
+    }
+    if (audience == StorefrontAudience.all) {
+      navigator.pushReplacement(MaterialPageRoute<void>(builder: (_) => page));
+      return;
+    }
+    navigator.push(MaterialPageRoute<void>(builder: (_) => page));
+  }
+
+  void _goHome() {
+    if (widget.audience == StorefrontAudience.all) return;
+    final navigation = StorefrontNavigation.maybeOf(context);
+    if (navigation != null) {
+      navigation.goHome();
+      return;
+    }
+    _selectAudience(StorefrontAudience.all);
   }
 
   @override
@@ -177,6 +205,7 @@ class _CatalogPageState extends State<CatalogPage> {
                   store: widget.store,
                   activeAudience: widget.audience,
                   onAudienceChanged: _selectAudience,
+                  onLogoPressed: _goHome,
                   onCartPressed: openCart,
                 ),
                 Expanded(
@@ -202,7 +231,7 @@ class _CatalogPageState extends State<CatalogPage> {
                             ],
                             CatalogSectionHeading(
                               key: _catalogSectionKey,
-                              title: widget.title,
+                              audience: widget.audience,
                             ),
                             const SizedBox(height: StorefrontSpacing.lg),
                             FilterBar(

@@ -4,8 +4,10 @@ import '../../core/theme/app_theme.dart';
 import '../../core/theme/storefront_theme.dart';
 import '../../data/models/product.dart';
 import '../../features/cart/cart_state.dart';
+import '../../navigation/storefront_navigation.dart';
 import '../checkout/checkout_page.dart';
 import '../../widgets/safe_product_image.dart';
+import '../../widgets/storefront_directional_icons.dart';
 
 class CartPage extends StatelessWidget {
   const CartPage({required this.store, super.key});
@@ -14,9 +16,23 @@ class CartPage extends StatelessWidget {
 
   void openCheckout(BuildContext context) {
     if (store.items.isEmpty) return;
+    final navigation = StorefrontNavigation.maybeOf(context);
+    if (navigation != null) {
+      navigation.openCheckout();
+      return;
+    }
     Navigator.of(
       context,
     ).push(MaterialPageRoute<void>(builder: (_) => CheckoutPage(store: store)));
+  }
+
+  void goBack(BuildContext context) {
+    final navigation = StorefrontNavigation.maybeOf(context);
+    if (navigation != null) {
+      navigation.goBack();
+      return;
+    }
+    Navigator.of(context).pop();
   }
 
   @override
@@ -28,8 +44,8 @@ class CartPage extends StatelessWidget {
           appBar: AppBar(
             leading: IconButton(
               tooltip: 'العودة للتسوق',
-              onPressed: () => Navigator.of(context).pop(),
-              icon: const Icon(Icons.arrow_forward),
+              onPressed: () => goBack(context),
+              icon: const StorefrontLeftArrowIcon(),
             ),
             title: const Text(
               'سلة التسوق',
@@ -58,7 +74,7 @@ class CartPage extends StatelessWidget {
             animation: store,
             builder: (context, _) {
               if (store.items.isEmpty) {
-                return _EmptyCart(onReturn: () => Navigator.of(context).pop());
+                return _EmptyCart(onReturn: () => goBack(context));
               }
 
               return LayoutBuilder(
@@ -82,8 +98,8 @@ class CartPage extends StatelessWidget {
                       ),
                       const SizedBox(height: StorefrontSpacing.xxs),
                       TextButton.icon(
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(Icons.arrow_forward, size: 18),
+                        onPressed: () => goBack(context),
+                        icon: const StorefrontLeftArrowIcon(size: 18),
                         label: const Text('العودة للتسوق'),
                         style: TextButton.styleFrom(
                           foregroundColor: StorefrontColors.mutedInk,
@@ -209,7 +225,10 @@ class _EmptyCart extends StatelessWidget {
                     width: double.infinity,
                     child: FilledButton.icon(
                       onPressed: onReturn,
-                      icon: const Icon(Icons.arrow_forward, size: 19),
+                      icon: const StorefrontLeftArrowIcon(
+                        key: ValueKey('empty-cart-left-arrow'),
+                        size: 19,
+                      ),
                       label: const Text('العودة للتسوق'),
                     ),
                   ),

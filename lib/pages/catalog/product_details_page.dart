@@ -6,8 +6,10 @@ import '../../core/theme/app_theme.dart';
 import '../../core/theme/storefront_theme.dart';
 import '../../data/models/product.dart';
 import '../../features/cart/cart_state.dart';
+import '../../navigation/storefront_navigation.dart';
 import '../../core/utils/hex_color.dart';
 import '../../widgets/safe_product_image.dart';
+import '../../widgets/storefront_logo.dart';
 import '../cart/cart_page.dart';
 
 class _ProductColorSwatch extends StatefulWidget {
@@ -556,6 +558,14 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
 
   void _openSearch() {
     final callback = widget.onSearchPressed;
+    final navigation = StorefrontNavigation.maybeOf(context);
+    if (navigation != null) {
+      navigation.goBack();
+      if (callback != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => callback());
+      }
+      return;
+    }
     final navigator = Navigator.of(context);
     if (callback == null) {
       if (navigator.canPop()) navigator.pop();
@@ -570,6 +580,11 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
   }
 
   Future<void> _goBack() async {
+    final navigation = StorefrontNavigation.maybeOf(context);
+    if (navigation != null) {
+      navigation.goBack();
+      return;
+    }
     final didPop = await Navigator.maybePop(context);
     if (!mounted || didPop) return;
     Navigator.of(context).pushReplacementNamed('/');
@@ -579,6 +594,15 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _goHome() {
+    final navigation = StorefrontNavigation.maybeOf(context);
+    if (navigation != null) {
+      navigation.goHome();
+      return;
+    }
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   void _addToCart({
@@ -1052,6 +1076,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
             preferredSize: const Size.fromHeight(72),
             child: _ProductDetailsHeader(
               store: store,
+              onLogoPressed: _goHome,
               onSearchPressed: _openSearch,
             ),
           ),
@@ -1149,10 +1174,12 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
 class _ProductDetailsHeader extends StatelessWidget {
   const _ProductDetailsHeader({
     required this.store,
+    required this.onLogoPressed,
     required this.onSearchPressed,
   });
 
   final StoreState store;
+  final VoidCallback onLogoPressed;
   final VoidCallback onSearchPressed;
 
   @override
@@ -1175,14 +1202,11 @@ class _ProductDetailsHeader extends StatelessWidget {
             children: [
               Align(
                 alignment: Alignment.centerLeft,
-                child: Image(
+                child: IronSamLogo(
                   key: const ValueKey('product-details-logo'),
-                  image: const AssetImage('assets/images/iron_sam_logo.png'),
-                  semanticLabel: 'آيرون سام',
                   width: logoWidth,
                   height: 56,
-                  fit: BoxFit.contain,
-                  filterQuality: FilterQuality.high,
+                  onPressed: onLogoPressed,
                 ),
               ),
               Align(
@@ -1225,9 +1249,16 @@ class _ProductCartAction extends StatelessWidget {
       children: [
         IconButton(
           tooltip: 'سلة التسوق',
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(builder: (_) => CartPage(store: store)),
-          ),
+          onPressed: () {
+            final navigation = StorefrontNavigation.maybeOf(context);
+            if (navigation != null) {
+              navigation.openCart();
+              return;
+            }
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => CartPage(store: store)),
+            );
+          },
           icon: const Icon(Icons.shopping_bag_outlined),
         ),
         if (store.itemCount > 0)

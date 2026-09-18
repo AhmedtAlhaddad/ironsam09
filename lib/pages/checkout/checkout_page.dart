@@ -8,6 +8,7 @@ import '../../data/local/libya_cities.dart';
 import '../../data/models/order.dart';
 import '../../features/cart/cart_state.dart';
 import '../../features/order/whatsapp_order_service.dart';
+import '../../navigation/storefront_navigation.dart';
 import '../../widgets/safe_product_image.dart';
 
 class CheckoutPage extends StatefulWidget {
@@ -43,6 +44,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   double get discount => widget.store.discountAmount;
   double get total => widget.store.total;
+
+  void _goBack() {
+    final navigation = StorefrontNavigation.maybeOf(context);
+    if (navigation != null) {
+      navigation.goBack();
+      return;
+    }
+    Navigator.of(context).pop();
+  }
 
   @override
   void dispose() {
@@ -225,7 +235,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
               appBar: AppBar(
                 leading: IconButton(
                   tooltip: 'العودة للسلة',
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: _goBack,
                   icon: const Icon(Icons.arrow_forward),
                 ),
                 title: Text(
@@ -235,7 +245,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 actions: [
                   IconButton(
                     tooltip: 'سلة التسوق',
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: _goBack,
                     icon: const Icon(Icons.shopping_bag_outlined),
                   ),
                 ],

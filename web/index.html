@@ -65,6 +65,25 @@
 </head>
 
 <body>
+  <script>
+    (() => {
+      const leaveWarning = (event) => {
+        event.preventDefault();
+        // Browsers intentionally ignore custom text and show a generic prompt.
+        event.returnValue = '';
+        return '';
+      };
+
+      window.setIronSamRootLeaveWarningEnabled = (enabled) => {
+        window.removeEventListener('beforeunload', leaveWarning);
+        if (enabled) {
+          window.addEventListener('beforeunload', leaveWarning);
+        }
+      };
+
+      window.ironSamRequestBrowserBack = () => window.history.back();
+    })();
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

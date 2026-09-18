@@ -12,8 +12,11 @@ import 'package:ironsam09/data/models/order.dart';
 import 'package:ironsam09/data/repositories/store_repository.dart';
 import 'package:ironsam09/admin/admin_service.dart';
 import 'package:ironsam09/admin/admin_widgets.dart';
+import 'package:ironsam09/navigation/storefront_router.dart';
+import 'package:ironsam09/pages/catalog/storefront_audience.dart';
 import 'package:ironsam09/widgets/catalog_widgets.dart';
 import 'package:ironsam09/widgets/safe_product_image.dart';
+import 'package:ironsam09/widgets/storefront_directional_icons.dart';
 
 void main() {
   test('release builds require a configured Supabase backend', () {
@@ -1042,21 +1045,15 @@ void main() {
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -500));
     await tester.pump();
     expect(find.text('الرجال'), findsWidgets);
-    expect(
-      find.text('تيشيرت الأداء الأساسي', skipOffstage: false),
-      findsOneWidget,
-    );
-    expect(find.text('سترة ستوديو خفيفة', skipOffstage: false), findsNothing);
+    expect(find.text('تيشيرت الأداء الأساسي'), findsOneWidget);
+    expect(find.text('سترة ستوديو خفيفة'), findsNothing);
 
     await tester.pumpWidget(MaterialApp(home: WomenPage(store: store)));
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -500));
     await tester.pump();
     expect(find.text('النساء'), findsWidgets);
-    expect(find.text('سترة ستوديو خفيفة', skipOffstage: false), findsOneWidget);
-    expect(
-      find.text('تيشيرت الأداء الأساسي', skipOffstage: false),
-      findsNothing,
-    );
+    expect(find.text('سترة ستوديو خفيفة'), findsOneWidget);
+    expect(find.text('تيشيرت الأداء الأساسي'), findsNothing);
   });
 
   testWidgets('cart continues to checkout', (tester) async {
@@ -1198,6 +1195,148 @@ void main() {
     expect(find.byType(MenPage), findsOneWidget);
   });
 
+  testWidgets('mobile menu arrows stay physically left-pointing in RTL', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(375, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(const MyApp());
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+
+    final arrows = find.descendant(
+      of: find.byType(StorefrontLeftArrowIcon),
+      matching: find.byType(Icon),
+    );
+    expect(arrows, findsNWidgets(4));
+    for (final icon in tester.widgetList<Icon>(arrows)) {
+      expect(icon.icon, Icons.arrow_back);
+      expect(icon.textDirection, TextDirection.ltr);
+    }
+  });
+
+  testWidgets('empty cart action arrow stays physically left-pointing in RTL', (
+    tester,
+  ) async {
+    final store = StoreState();
+    addTearDown(store.dispose);
+
+    await tester.pumpWidget(MaterialApp(home: CartPage(store: store)));
+    final arrow = find.descendant(
+      of: find.byKey(const ValueKey('empty-cart-left-arrow')),
+      matching: find.byType(Icon),
+    );
+    final icon = tester.widget<Icon>(arrow);
+
+    expect(icon.icon, Icons.arrow_back);
+    expect(icon.textDirection, TextDirection.ltr);
+  });
+
+  testWidgets(
+    'audience headings come from StorefrontAudience without subtitle gaps',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(375, 800));
+      final store = StoreState();
+      addTearDown(() {
+        tester.binding.setSurfaceSize(null);
+        store.dispose();
+      });
+
+      await tester.pumpWidget(MaterialApp(home: MenPage(store: store)));
+      await tester.pump();
+      expect(find.text('ملابس الرجال'), findsOneWidget);
+      expect(find.text('تشكيلة الرجال'), findsNothing);
+
+      await tester.pumpWidget(MaterialApp(home: WomenPage(store: store)));
+      await tester.pump();
+      expect(find.text('ملابس النساء'), findsOneWidget);
+      expect(find.text('تشكيلة النساء'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'logo returns to the existing Home route without duplicating it',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(375, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(const MyApp());
+      await tester.pump();
+      Navigator navigator() => tester.widget<Navigator>(find.byType(Navigator));
+
+      expect(navigator().pages, hasLength(1));
+      await tester.tap(find.byKey(const ValueKey('storefront-logo-home')));
+      await tester.pumpAndSettle();
+      expect(navigator().pages, hasLength(1));
+
+      await tester.tap(find.byIcon(Icons.menu));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('storefront-mobile-filter-men')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(MenPage), findsOneWidget);
+      expect(navigator().pages, hasLength(2));
+
+      await tester.tap(find.byKey(const ValueKey('storefront-logo-home')));
+      await tester.pumpAndSettle();
+      expect(find.byType(CollectionsPage), findsOneWidget);
+      expect(find.byType(PageIntro), findsOneWidget);
+      expect(navigator().pages, hasLength(1));
+    },
+  );
+
+  testWidgets('storefront back and restored forward state preserve audience', (
+    tester,
+  ) async {
+    final store = StoreState();
+    final delegate = StorefrontRouterDelegate(store: store);
+    addTearDown(() {
+      delegate.dispose();
+      store.dispose();
+    });
+
+    await tester.pumpWidget(
+      MaterialApp.router(
+        routerDelegate: delegate,
+        routeInformationParser: const StorefrontRouteInformationParser(),
+      ),
+    );
+    delegate.selectAudience(StorefrontAudience.men);
+    await tester.pumpAndSettle();
+    expect(find.byType(MenPage), findsOneWidget);
+
+    delegate.openProduct(products.first);
+    await tester.pumpAndSettle();
+    expect(find.byType(ProductDetailsPage), findsOneWidget);
+    const parser = StorefrontRouteInformationParser();
+    final productRouteInformation = parser.restoreRouteInformation(
+      delegate.currentConfiguration,
+    );
+    final restoredProductState = await parser.parseRouteInformation(
+      productRouteInformation,
+    );
+
+    delegate.goBack();
+    await tester.pumpAndSettle();
+    expect(find.byType(MenPage), findsOneWidget);
+
+    await delegate.setNewRoutePath(restoredProductState);
+    await tester.pumpAndSettle();
+    expect(find.byType(ProductDetailsPage), findsOneWidget);
+
+    delegate.openCart();
+    await tester.pumpAndSettle();
+    expect(find.byType(CartPage), findsOneWidget);
+    delegate.openCheckout();
+    await tester.pumpAndSettle();
+    expect(find.byType(CheckoutPage), findsOneWidget);
+    delegate.goBack();
+    await tester.pumpAndSettle();
+    expect(find.byType(CartPage), findsOneWidget);
+  });
+
   testWidgets('Hero visibility and spacing adapt at storefront breakpoints', (
     tester,
   ) async {
@@ -1303,10 +1442,19 @@ void main() {
     expect(find.byType(MenPage), findsOneWidget);
     expect(find.byType(PageIntro), findsNothing);
     expect(
-      find.text('تيشيرت الأداء الأساسي', skipOffstage: false),
+      find.descendant(
+        of: find.byType(MenPage),
+        matching: find.text('تيشيرت الأداء الأساسي'),
+      ),
       findsOneWidget,
     );
-    expect(find.text('سترة ستوديو خفيفة', skipOffstage: false), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byType(MenPage),
+        matching: find.text('سترة ستوديو خفيفة'),
+      ),
+      findsNothing,
+    );
 
     await tester.binding.setSurfaceSize(const Size(1024, 800));
     await tester.pumpAndSettle();
@@ -1325,9 +1473,18 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(WomenPage), findsOneWidget);
     expect(find.byType(PageIntro), findsNothing);
-    expect(find.text('سترة ستوديو خفيفة', skipOffstage: false), findsOneWidget);
     expect(
-      find.text('تيشيرت الأداء الأساسي', skipOffstage: false),
+      find.descendant(
+        of: find.byType(WomenPage),
+        matching: find.text('سترة ستوديو خفيفة'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byType(WomenPage),
+        matching: find.text('تيشيرت الأداء الأساسي'),
+      ),
       findsNothing,
     );
 

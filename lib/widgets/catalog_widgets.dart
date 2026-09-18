@@ -8,9 +8,14 @@ import '../../core/theme/storefront_theme.dart';
 import '../core/utils/image_url_policy.dart';
 import '../../data/models/product.dart';
 import '../../features/cart/cart_state.dart';
+import '../navigation/storefront_navigation.dart';
 import '../pages/catalog/product_details_page.dart';
 import '../pages/catalog/storefront_audience.dart';
 import 'safe_product_image.dart';
+import 'storefront_directional_icons.dart';
+import 'storefront_logo.dart';
+
+export 'storefront_logo.dart';
 
 class HeroImageSource {
   const HeroImageSource({required this.url, required this.productName});
@@ -48,30 +53,6 @@ List<HeroImageSource> buildHeroImageSources(Iterable<Product> products) {
   return List.unmodifiable(sources);
 }
 
-class IronSamLogo extends StatelessWidget {
-  const IronSamLogo({this.width = 96, this.height = 58, super.key});
-
-  final double width;
-  final double height;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: width,
-      height: height,
-      alignment: Alignment.center,
-      child: Image.asset(
-        'assets/images/iron_sam_logo.png',
-        semanticLabel: 'آيرون سام',
-        width: width,
-        height: height,
-        fit: BoxFit.contain,
-        filterQuality: FilterQuality.high,
-      ),
-    );
-  }
-}
-
 class DeliveryBanner extends StatelessWidget {
   const DeliveryBanner({super.key});
 
@@ -102,6 +83,7 @@ class StoreHeader extends StatelessWidget {
     required this.store,
     required this.activeAudience,
     required this.onAudienceChanged,
+    required this.onLogoPressed,
     required this.onCartPressed,
     super.key,
   });
@@ -109,6 +91,7 @@ class StoreHeader extends StatelessWidget {
   final StoreState store;
   final StorefrontAudience activeAudience;
   final ValueChanged<StorefrontAudience> onAudienceChanged;
+  final VoidCallback onLogoPressed;
   final VoidCallback onCartPressed;
 
   @override
@@ -140,7 +123,12 @@ class StoreHeader extends StatelessWidget {
                           onPressed: () => _showMobileMenu(context),
                           icon: const Icon(Icons.menu),
                         ),
-                      const IronSamLogo(width: 92, height: 54),
+                      IronSamLogo(
+                        key: const ValueKey('storefront-logo-home'),
+                        width: 92,
+                        height: 54,
+                        onPressed: onLogoPressed,
+                      ),
                     ],
                   ),
                 ),
@@ -343,8 +331,8 @@ class _MobileMenuItem extends StatelessWidget {
           fontWeight: FontWeight.w800,
         ),
       ),
-      trailing: Icon(
-        Icons.arrow_back,
+      trailing: StorefrontLeftArrowIcon(
+        key: const ValueKey('storefront-mobile-left-arrow'),
         color: active ? accentColor : Colors.black54,
         size: 19,
       ),
@@ -810,9 +798,9 @@ class _HeroCopy extends StatelessWidget {
 }
 
 class CatalogSectionHeading extends StatelessWidget {
-  const CatalogSectionHeading({required this.title, super.key});
+  const CatalogSectionHeading({required this.audience, super.key});
 
-  final String title;
+  final StorefrontAudience audience;
 
   @override
   Widget build(BuildContext context) {
@@ -834,7 +822,7 @@ class CatalogSectionHeading extends StatelessWidget {
               ),
               const SizedBox(height: StorefrontSpacing.xs),
               Text(
-                'تسوق التشكيلة',
+                audience.sectionHeading,
                 style: TextStyle(
                   color: StorefrontColors.ink,
                   fontSize: compact ? 28 : 36,
@@ -844,28 +832,33 @@ class CatalogSectionHeading extends StatelessWidget {
               ),
             ],
           );
-          final contextWidget = Text(
-            title == 'الكل' ? 'كل القطع' : 'تشكيلة $title',
-            style: const TextStyle(
-              color: StorefrontColors.mutedInk,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-            ),
-          );
+          final contextLabel = audience.sectionContext;
+          final contextWidget = contextLabel == null
+              ? null
+              : Text(
+                  contextLabel,
+                  style: const TextStyle(
+                    color: StorefrontColors.mutedInk,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                );
           if (compact) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 titleWidget,
-                const SizedBox(height: StorefrontSpacing.sm),
-                contextWidget,
+                if (contextWidget != null) ...[
+                  const SizedBox(height: StorefrontSpacing.sm),
+                  contextWidget,
+                ],
               ],
             );
           }
           return Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.end,
-            children: [titleWidget, contextWidget],
+            children: [titleWidget, ?contextWidget],
           );
         },
       ),
@@ -1503,6 +1496,11 @@ class _ProductCardState extends State<ProductCard> {
   Product get product => widget.product;
 
   void openDetails(BuildContext context) {
+    final navigation = StorefrontNavigation.maybeOf(context);
+    if (navigation != null) {
+      navigation.openProduct(product, onSearchPressed: widget.onSearchPressed);
+      return;
+    }
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => ProductDetailsPage(

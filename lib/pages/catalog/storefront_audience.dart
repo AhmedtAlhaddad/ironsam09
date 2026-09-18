@@ -7,4 +7,15 @@ enum StorefrontAudience {
 
   final String label;
   final String? productGender;
+
+  String get sectionHeading => switch (this) {
+    StorefrontAudience.all => 'تسوق التشكيلة',
+    StorefrontAudience.men => 'ملابس الرجال',
+    StorefrontAudience.women => 'ملابس النساء',
+  };
+
+  String? get sectionContext => switch (this) {
+    StorefrontAudience.all => 'كل القطع',
+    StorefrontAudience.men || StorefrontAudience.women => null,
+  };
 }
